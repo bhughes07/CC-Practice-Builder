@@ -3,8 +3,9 @@
 Personal finance agent. Python 3.11+, standard library only (optional `anthropic` for the coach's note).
 
 ## Layout
-- `finagent/sources/` — data in: `ynab.py` (official API), `csv_import.py` (auto-detects YNAB, Monarch, Mint,
-  Rocket Money, Copilot, generic bank CSVs), `demo.py` (synthetic household).
+- `finagent/sources/` — data in: `plaid.py` (bank connections: Link page on 127.0.0.1, `/transactions/sync`
+  with cursors, Plaid categories → finagent categories), `ynab.py` (official API), `csv_import.py`
+  (auto-detects YNAB, Monarch, Mint, Rocket Money, Copilot, generic bank CSVs), `demo.py` (synthetic household).
 - `finagent/store.py` — SQLite: raw transactions + budgets only. Everything else is derived at load time.
 - `finagent/categorize.py` — merchant clean-up, category → class (essential / discretionary / giving / …),
   income / expense / transfer classification.
@@ -21,5 +22,6 @@ Personal finance agent. Python 3.11+, standard library only (optional `anthropic
 - Tests: `python -m pytest -q`. Add a test for every detector / importer change.
 
 ## Never commit
-`config.toml`, `data/`, `imports/`, `reports/`, `*.db`, `*.csv` (except `tests/fixtures/`). The repository is
-public. Secrets (`YNAB_TOKEN`, `FINAGENT_SMTP_PASSWORD`, `ANTHROPIC_API_KEY`) live in environment variables only.
+`config.toml`, `data/` (includes `plaid.json` with bank access tokens), `imports/`, `reports/`, `*.db`, `*.csv`
+(except `tests/fixtures/`). The repository is public. Secrets (`PLAID_CLIENT_ID`, `PLAID_SECRET`, `YNAB_TOKEN`,
+`FINAGENT_SMTP_PASSWORD`, `ANTHROPIC_API_KEY`) live in environment variables only.

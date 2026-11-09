@@ -5,7 +5,9 @@
 #   scripts/scheduled-run.sh monthly     # e.g. the 2nd of each month
 #
 # Secrets are read from ~/.config/finagent/env (chmod 600), never from the repo:
-#   YNAB_TOKEN=...
+#   PLAID_CLIENT_ID=...          (Plaid)
+#   PLAID_SECRET=...
+#   YNAB_TOKEN=...               (YNAB)
 #   FINAGENT_SMTP_PASSWORD=...
 #   ANTHROPIC_API_KEY=...        (only if [ai] enabled = true)
 set -euo pipefail

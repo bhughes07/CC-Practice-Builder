@@ -17,6 +17,7 @@ import argparse
 import glob
 import shutil
 import sys
+import time
 import webbrowser
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -31,8 +32,8 @@ from finagent.reports.model import Report
 from finagent.sources.csv_import import read_csv
 from finagent.store import Store
 from finagent.util import (
-    add_months, fmt_date, fmt_range, last_complete_week, money, month_end, month_key, month_label, month_start,
-    shift_month, week_start,
+    add_months, fmt_date, fmt_range, last_complete_week, money, money_auto, month_end, month_key, month_label,
+    month_start, shift_month, week_start,
 )
 
 
@@ -55,7 +56,7 @@ def _today(args) -> date:
 
 
 def _store(cfg: Config, args) -> Store:
-    path = Path(args.db) if getattr(args, "db", None) else cfg.resolve(cfg["storage"]["database"])
+    path = Path(args.db) if getattr(args, "db", None) else cfg.database_path()
     return Store(path)
 
 
@@ -77,6 +78,11 @@ def _formats(cfg: Config, args) -> list[str]:
 
 
 def _finish(rep: Report, cfg: Config, args, send_email: bool = False) -> dict:
+    problems = getattr(args, "sync_problems", None)
+    if problems:  # scheduled runs: make sync trouble visible in the emailed report, not just a log
+        rep.sections.insert(0, {"type": "callout", "tone": "warn", "title": "Some accounts didn't sync",
+                                "body": " ".join(problems) + " Recent transactions from those accounts may be "
+                                                             "missing from this report."})
     if getattr(args, "ai", False) or cfg["ai"].get("enabled"):
         from finagent.ai import coach_note
         rep.coach = coach_note(rep.summary, rep.kind, cfg)
@@ -107,9 +113,18 @@ def _finish(rep: Report, cfg: Config, args, send_email: bool = False) -> dict:
 # --------------------------------------------------------------------------- sync / import
 
 def do_sync(cfg: Config, store: Store, today: date) -> str:
-    src = cfg["source"]["type"]
+    """Sync every configured source. `source.type` may be one name or a list (e.g. ["plaid", "csv"])."""
+    sources = cfg["source"]["type"]
+    sources = [sources] if isinstance(sources, str) else list(sources)
+    return "\n".join(_sync_one(src, cfg, store, today) for src in sources)
+
+
+def _sync_one(src: str, cfg: Config, store: Store, today: date) -> str:
     history = int(cfg["source"].get("history_months", 12))
     since = add_months(date(today.year, today.month, 1), -history)
+    if src == "plaid":
+        from finagent.sources.plaid import sync_all
+        return sync_all(cfg, store)
     if src == "ynab":
         from finagent.sources.ynab import YNABSource
         ynab = YNABSource(cfg.ynab_token() or "", cfg["source"].get("budget_id", "last-used"))
@@ -140,7 +155,7 @@ def do_sync(cfg: Config, store: Store, today: date) -> str:
         store.upsert_transactions(txns)
         store.upsert_budgets(budgets)
         return f"Demo data: {len(txns)} transactions."
-    raise CLIError(f"Unknown source.type '{src}' (use ynab, csv, or demo)")
+    raise CLIError(f"Unknown source.type '{src}' (use plaid, ynab, csv, or demo)")
 
 
 def cmd_sync(args, cfg: Config) -> int:
@@ -177,7 +192,7 @@ def cmd_status(args, cfg: Config) -> int:
     with _store(cfg, args) as store:
         _say(f"finagent {__version__}")
         _say(f"Config:   {cfg.path or '(defaults — run `finagent init`)'}")
-        _say(f"Source:   {cfg['source']['type']}")
+        _say(f"Source:   {', '.join(cfg.sources)}" + (" (Plaid SANDBOX — test data only)" if cfg.sandbox_mode else ""))
         _say(f"Database: {store.path}")
         _status_line(store)
         sources = store.conn.execute("SELECT source, COUNT(*) FROM transactions GROUP BY source").fetchall()
@@ -246,11 +261,18 @@ def cmd_monthly(args, cfg: Config, send_email: bool = False) -> int:
 
 def cmd_run(args, cfg: Config) -> int:
     """Sync, build, save, and email (if enabled) — designed for schedulers."""
+    problems: list[str] = []
     with _store(cfg, args) as store:
         try:
-            _say(do_sync(cfg, store, _today(args)))
+            out = do_sync(cfg, store, _today(args))
+            _say(out)
+            problems = [ln.strip() for ln in out.splitlines()
+                        if any(k in ln for k in ("needs you to sign in again", "sync failed", "no banks connected",
+                                                 "Set the PLAID_CLIENT_ID"))]
         except Exception as err:  # keep going with what's already in the database
             _err(f"sync failed, reporting on existing data: {err}")
+            problems = [f"Sync failed ({err}); this report uses the data already on your computer."]
+    args.sync_problems = problems
     send = bool(cfg["email"].get("enabled"))
     if args.report == "weekly":
         return cmd_weekly(args, cfg, send)
@@ -392,6 +414,168 @@ def cmd_demo(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_budget_suggest(args, cfg: Config) -> int:
+    """Print a ready-to-paste [budgets] block based on what you actually spend."""
+    import math
+
+    from finagent.models import CLASS_DISCRETIONARY, CLASS_FEES, CLASS_SAVINGS, CLASS_TRANSFER
+    with _store(cfg, args) as store:
+        L = _ledger(cfg, store, _today(args))
+        A = _analysis(L, args.months or 3)
+        cur = L.currency
+        trim = max(0.0, min(0.5, args.trim / 100))
+        window = A.window_expenses()
+        rows = []
+        for cat, row in A.cat_matrix_core.items():
+            avg = sum(row.values()) / A.n
+            cls = L.class_of(cat)
+            if avg < 5 or cls in (CLASS_SAVINGS, CLASS_TRANSFER, CLASS_FEES):
+                continue
+            spent = [t for t in window if t.category == cat and t.id not in A.unusual_ids]
+            total = sum(t.outflow for t in spent) or 1
+            fixed = sum(t.outflow for t in spent if t.id in A.recurring_ids) / total >= 0.7
+            if fixed:  # bills and subscriptions: budget what they cost
+                target, note = math.ceil(avg / 5) * 5, "fixed"
+            elif cls == CLASS_DISCRETIONARY and not L.is_protected(cat):
+                goal = avg * (1 - trim)
+                step = 5 if goal < 100 else 25
+                target, note = max(step, round(goal / step) * step), f"-{args.trim:.0f}%"
+            else:
+                step = 5 if avg < 100 else 25
+                target, note = max(step, round(avg / step) * step), ""
+            rows.append((L.group_of(cat), cat, target, avg, note))
+        one_offs = sum(t.outflow for t, _ in A.unusual) / A.n
+        if one_offs >= 25:
+            rows.append(("Planning", "Irregular Expenses", math.ceil(one_offs / 25) * 25, one_offs, "sinking fund"))
+        rows.sort(key=lambda r: (r[0], -r[3]))
+
+        lines = [f"# Suggested from your spending, {month_label(A.months[0])} – {month_label(A.months[-1])}.",
+                 f"# Fixed bills = what they cost · lifestyle categories = {args.trim:.0f}% under your average ·",
+                 "# one-off purchases moved to an 'Irregular Expenses' fund. Edit, then paste into config.toml.",
+                 "[budgets]"]
+        group = None
+        for g, cat, target, avg, note in rows:
+            if g != group:
+                lines.append(f"# {g}")
+                group = g
+            key = cat.replace('"', '\\"')
+            lines.append(f'"{key}" = {target:.0f}'.ljust(42) + f"# avg {money_auto(avg, cur)}" + (f" ({note})" if note else ""))
+        total = sum(r[2] for r in rows)
+        left = A.avg_income - total
+        lines.append(f"# Total {money_auto(total, cur)}/mo · average income {money_auto(A.avg_income, cur)}/mo")
+        if A.avg_income and left < A.avg_income * A.savings_target:
+            need = A.avg_income * A.savings_target - left
+            lines.append(f"# ⚠ This leaves {money_auto(left, cur)}/mo ({left / A.avg_income * 100:.0f}% of income). "
+                         f"Trim about {money_auto(need, cur)} more to save {A.savings_target * 100:.0f}%.")
+        elif A.avg_income:
+            lines.append(f"# Leaves {money_auto(left, cur)}/mo to save ({left / A.avg_income * 100:.0f}% of income).")
+        _say("\n".join(lines))
+    return 0
+
+
+# --------------------------------------------------------------------------- plaid
+
+def _plaid_client(cfg: Config):
+    from finagent.sources.plaid import make_client
+    return make_client(cfg)
+
+
+def cmd_plaid(args, cfg: Config) -> int:
+    from finagent.sources.plaid import LinkSession, PlaidItems, items_path, new_item, sync_item
+
+    items = PlaidItems(items_path(cfg))
+    pc = cfg["plaid"]
+
+    if args.plaid_cmd == "list":
+        if not items.items:
+            _say("No banks connected yet. Run `finagent plaid link`.")
+            return 0
+        for it in items.items:
+            status = {"ok": "connected", "relink": "NEEDS SIGN-IN (finagent plaid link --update)"}.get(
+                it.get("status", "ok"), it.get("status"))
+            _say(f"{it['institution']['name']}  [{it.get('env', 'production')}] — {status}"
+                 + (f" · last sync {it['last_sync'].replace('T', ' ')}" if it.get("last_sync") else " · never synced"))
+            for a in it.get("accounts", {}).values():
+                skip = "" if a.get("type") in ("depository", "credit", "") else "  (balances only — not counted as spending)"
+                _say(f"    {a.get('name', '')} ••{a.get('mask', '')}  {a.get('subtype') or a.get('type', '')}{skip}")
+        return 0
+
+    if args.plaid_cmd == "remove":
+        matches = items.find(args.name)
+        if len(matches) != 1:
+            raise CLIError(f"'{args.name}' matches {len(matches)} connections; use the exact bank name from "
+                           f"`finagent plaid list`.")
+        it = matches[0]
+        try:
+            _plaid_client(cfg).remove_item(it["access_token"])
+        except Exception as err:  # still forget it locally
+            _err(f"Plaid didn't confirm the removal ({err}); forgetting it locally anyway.")
+        items.remove(it["item_id"])
+        items.save()
+        msg = f"Disconnected {it['institution']['name']}."
+        if args.delete_data:
+            with _store(cfg, args) as store:
+                n = store.delete_prefix(f"plaid:{it['item_id']}:")
+            msg += f" Deleted {n} of its transactions."
+        _say(msg)
+        return 0
+
+    client = _plaid_client(cfg)
+
+    if args.plaid_cmd == "sandbox":
+        public_token = client.sandbox_public_token(username=args.username, days_requested=int(pc["days_requested"]))
+        access_token, item_id = client.exchange_public_token(public_token)
+        item = new_item(access_token, item_id, client.env,
+                        {"institution": {"name": "First Platypus Bank (sandbox)", "institution_id": "ins_109508"}})
+        items.upsert(item)
+        items.save()
+        _say(f"Connected Plaid's test bank ({args.username}).")
+        with _store(cfg, args) as store:
+            for attempt in range(6):
+                res = sync_item(client, item, store)
+                if res.error or res.added or res.status != "NOT_READY":
+                    break
+                time.sleep(5)  # sandbox history is usually ready within seconds
+            items.save()
+            _say(res.line())
+            _status_line(store)
+        return 0
+
+    # link / relink
+    update = None
+    if args.update:
+        matches = items.find(args.update)
+        if len(matches) != 1:
+            raise CLIError(f"'{args.update}' matches {len(matches)} connections; see `finagent plaid list`.")
+        update = matches[0]
+    try:
+        session = LinkSession(client, items, pc["client_name"], pc["country_codes"], int(pc["days_requested"]),
+                              int(args.port or pc["port"]), update)
+    except OSError:
+        session = LinkSession(client, items, pc["client_name"], pc["country_codes"], int(pc["days_requested"]),
+                              0, update)
+    _say(f"Opening {session.url}")
+    _say("Sign in to each bank or credit card in the Plaid window, then click \"I'm done\". (Ctrl+C to cancel.)")
+    if not args.no_browser:
+        _say("If your browser didn't open, paste the address above into it.")
+    try:
+        linked = session.run(open_browser=not args.no_browser)
+    except KeyboardInterrupt:
+        linked = session.linked
+    if not linked:
+        _say("No banks were connected.")
+        return 0
+    _say("\nConnected: " + ", ".join(i["institution"]["name"] for i in linked))
+    with _store(cfg, args) as store:
+        for it in linked:
+            _say(sync_item(client, it, store).line())
+        items.save()
+        _status_line(store)
+    _say("Plaid keeps downloading history for a few minutes after you connect. Run `finagent sync` later to pull "
+         "the rest, then `finagent budget-suggest` and `finagent review --open`.")
+    return 0
+
+
 def cmd_ynab_budgets(args, cfg: Config) -> int:
     from finagent.sources.ynab import YNABSource
     for b in YNABSource(cfg.ynab_token() or "").list_budgets():
@@ -459,6 +643,23 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("demo", help="generate sample data and every report")
     report_opts(sp)
 
+    sp = sub.add_parser("plaid", help="connect banks directly through Plaid")
+    psub = sp.add_subparsers(dest="plaid_cmd", required=True, metavar="action")
+    lp = psub.add_parser("link", help="connect a bank or credit card (opens a local page in your browser)")
+    lp.add_argument("--update", metavar="BANK", help="re-sign-in to a bank that stopped syncing")
+    lp.add_argument("--port", type=int, help="local port for the connect page (default 8765)")
+    lp.add_argument("--no-browser", action="store_true", help="just print the address")
+    psub.add_parser("list", help="connected banks and accounts")
+    rp = psub.add_parser("remove", help="disconnect a bank")
+    rp.add_argument("name", help="bank name as shown by `finagent plaid list`")
+    rp.add_argument("--delete-data", action="store_true", help="also delete its transactions locally")
+    tp = psub.add_parser("sandbox", help="connect Plaid's fake test bank (needs plaid.env = sandbox)")
+    tp.add_argument("--username", default="user_transactions_dynamic")
+
+    sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
+    sp.add_argument("--months", type=int, help="months to average (default 3)")
+    sp.add_argument("--trim", type=float, default=10.0, help="percent below average for discretionary (default 10)")
+
     sub.add_parser("ynab-budgets", help="list your YNAB budgets and their ids")
     return p
 
@@ -466,7 +667,8 @@ def build_parser() -> argparse.ArgumentParser:
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "sync": cmd_sync, "import": cmd_import, "itemize": cmd_itemize,
     "subscriptions": cmd_subscriptions, "review": cmd_review, "weekly": cmd_weekly, "monthly": cmd_monthly,
-    "run": cmd_run, "demo": cmd_demo, "ynab-budgets": cmd_ynab_budgets,
+    "run": cmd_run, "demo": cmd_demo, "ynab-budgets": cmd_ynab_budgets, "budget-suggest": cmd_budget_suggest,
+    "plaid": cmd_plaid,
 }
 
 
@@ -478,9 +680,13 @@ def main(argv: list[str] | None = None) -> int:
     except (CLIError, FileNotFoundError, ValueError) as err:
         _err(str(err))
         return 2
-    except Exception as err:  # surface source errors (YNAB, CSV) without a traceback wall
+    except Exception as err:  # surface source errors (YNAB, Plaid) without a traceback wall
+        from finagent.sources.plaid import PlaidError
         from finagent.sources.ynab import YNABError
         if isinstance(err, YNABError):
             _err(str(err))
+            return 2
+        if isinstance(err, PlaidError):
+            _err(f"Plaid: {err.display or err.message or err.code}")
             return 2
         raise

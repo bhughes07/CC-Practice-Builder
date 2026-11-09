@@ -4,7 +4,8 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\scheduled-run.ps1 monthly
 #
 # Set secrets once as *user* environment variables (never in the repo):
-#   [Environment]::SetEnvironmentVariable("YNAB_TOKEN", "...", "User")
+#   [Environment]::SetEnvironmentVariable("PLAID_CLIENT_ID", "...", "User")
+#   [Environment]::SetEnvironmentVariable("PLAID_SECRET", "...", "User")
 #   [Environment]::SetEnvironmentVariable("FINAGENT_SMTP_PASSWORD", "...", "User")
 param([ValidateSet("weekly", "monthly", "review")][string]$Report = "weekly")
 

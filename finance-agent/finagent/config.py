@@ -26,7 +26,7 @@ DEFAULTS: dict[str, Any] = {
         "week_starts_on": "monday",
     },
     "source": {
-        # ynab | csv | demo
+        # plaid | ynab | csv | demo — or a list, e.g. ["plaid", "csv"]
         "type": "csv",
         "budget_id": "last-used",  # YNAB: "last-used" or a budget UUID
         "history_months": 12,  # how far back `sync` pulls (12 = catch annual renewals)
@@ -38,6 +38,15 @@ DEFAULTS: dict[str, Any] = {
         "date_order": "auto",  # auto | mdy | dmy
     },
     "storage": {"database": "data/finance.db"},
+    "plaid": {
+        # sandbox = Plaid's fake test bank; production = your real accounts (free Trial plan: 10 banks)
+        "env": "production",
+        "country_codes": ["US"],
+        "days_requested": 730,  # history to request when linking (max 730)
+        "port": 8765,  # local page used once per bank to sign in through Plaid Link
+        "client_name": "finagent",
+        # Keys come from PLAID_CLIENT_ID and PLAID_SECRET environment variables.
+    },
     "analysis": {
         "review_months": 6,
         # Never suggested as "cuts". Matched case-insensitively against
@@ -119,10 +128,34 @@ class Config(dict):
         val = str(self["household"].get("week_starts_on", "monday")).lower()
         return names.index(val) if val in names else 0
 
+    @property
+    def sources(self) -> list[str]:
+        t = self["source"]["type"]
+        return [t] if isinstance(t, str) else list(t)
+
+    @property
+    def plaid_env(self) -> str:
+        return os.environ.get("PLAID_ENV") or self["plaid"].get("env", "production")
+
+    @property
+    def sandbox_mode(self) -> bool:
+        """Plaid's fake test bank is in use — keep its data away from the real database."""
+        return "plaid" in self.sources and self.plaid_env == "sandbox"
+
+    def database_path(self) -> Path:
+        db = self["storage"]["database"]
+        if self.sandbox_mode and db == DEFAULTS["storage"]["database"]:
+            return self.resolve("data/sandbox.db")
+        return self.resolve(db)
+
     # Secrets: environment only, never the config file.
     @staticmethod
     def ynab_token() -> str | None:
         return os.environ.get("YNAB_TOKEN") or os.environ.get("FINAGENT_YNAB_TOKEN")
+
+    @staticmethod
+    def plaid_keys() -> tuple[str | None, str | None]:
+        return os.environ.get("PLAID_CLIENT_ID"), os.environ.get("PLAID_SECRET")
 
     @staticmethod
     def smtp_password() -> str | None:

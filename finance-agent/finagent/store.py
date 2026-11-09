@@ -96,6 +96,17 @@ class Store:
         inserted, updated = self.upsert_transactions(txns)
         return inserted, updated, len(stale)
 
+    def delete_transactions(self, ids: Iterable[str]) -> int:
+        ids = list(ids)
+        with self.conn:
+            self.conn.executemany("DELETE FROM transactions WHERE id = ?", [(i,) for i in ids])
+        return len(ids)
+
+    def delete_prefix(self, prefix: str) -> int:
+        with self.conn:
+            cur = self.conn.execute("DELETE FROM transactions WHERE substr(id, 1, ?) = ?", (len(prefix), prefix))
+        return cur.rowcount
+
     def transactions(self, start: date | None = None, end: date | None = None) -> list[Transaction]:
         sql, args = "SELECT * FROM transactions WHERE 1=1", []
         if start:

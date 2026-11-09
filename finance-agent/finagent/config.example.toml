@@ -1,6 +1,8 @@
 # finagent configuration
 # Copy to config.toml (`finagent init` does this). config.toml is git-ignored.
 # Secrets NEVER go in this file — they come from environment variables:
+#   PLAID_CLIENT_ID          Plaid client id         (Plaid Dashboard → Keys)
+#   PLAID_SECRET             Plaid secret for the env below
 #   YNAB_TOKEN               YNAB personal access token
 #   FINAGENT_SMTP_PASSWORD   email app password
 #   ANTHROPIC_API_KEY        only if you turn on the AI coach's note
@@ -11,9 +13,11 @@ currency = "$"
 week_starts_on = "monday"          # weekly reports cover Mon–Sun (or "sunday")
 
 [source]
-# ynab  → pulls live from the YNAB API (best: includes your budget targets)
+# plaid → connects straight to your banks and cards (run `finagent plaid link` once per bank)
+# ynab  → pulls live from the YNAB API (includes your budget targets)
 # csv   → reads exports from any app/bank dropped in the imports/ folder
-type = "csv"
+# Combine them with a list, e.g. type = ["plaid", "csv"]
+type = "plaid"
 budget_id = "last-used"            # YNAB only: "last-used" or a budget id from `finagent ynab-budgets`
 history_months = 12                # how far back to pull (12 catches annual renewals)
 
@@ -24,7 +28,14 @@ sign = "auto"                      # auto | expenses_negative | expenses_positiv
 date_order = "auto"                # auto | mdy | dmy
 
 [storage]
-database = "data/finance.db"
+database = "data/finance.db"       # Plaid sandbox (test) mode automatically uses data/sandbox.db
+
+[plaid]
+env = "production"                 # "sandbox" = Plaid's fake test bank; override per run with PLAID_ENV
+country_codes = ["US"]
+days_requested = 730               # history to request when you connect a bank (max 730 days)
+port = 8765                        # local page used for `finagent plaid link`
+client_name = "finagent"           # shown in the Plaid window
 
 [analysis]
 review_months = 6                  # 3–6 is the sweet spot for the review
@@ -35,8 +46,9 @@ large_transaction = 150.0          # floor for "unusual purchase" flags
 protected = ["tithe", "giving", "church", "charity", "donation", "offering", "missions",
              "saving", "invest", "retirement", "401k", "ira", "emergency fund", "529"]
 
-# Monthly targets, used when your source has no budgets (YNAB provides its own).
-# Category names must match your data exactly.
+# Monthly targets, used when your source has no budgets (Plaid, banks, most CSVs).
+# YNAB provides its own. Category names must match your data exactly —
+# `finagent budget-suggest` prints a ready-to-paste block based on what you really spend.
 [budgets]
 # "Groceries" = 900
 # "Dining Out" = 350

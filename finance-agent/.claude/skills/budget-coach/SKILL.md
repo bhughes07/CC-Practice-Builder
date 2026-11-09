@@ -14,8 +14,11 @@ your job is to run it, read what it found, and turn it into a clear conversation
 python -m finagent status
 ```
 
-- No transactions → help them connect a source (see README "Connect your budgeting app"),
+- No transactions → help them connect a source (see README "Connect your bank"),
   or offer `python -m finagent demo` to show what the reports look like.
+- `source = plaid` → run `python -m finagent sync` first (needs `PLAID_CLIENT_ID` / `PLAID_SECRET`). If a bank
+  says it needs sign-in again, tell them to run `python -m finagent plaid link --update "<bank>"` themselves —
+  it opens a browser window where they sign in to the bank; never ask for bank credentials.
 - `source = ynab` → run `python -m finagent sync` first (needs `YNAB_TOKEN` in the environment).
 - `source = csv` → ask if they've dropped a new export into `imports/`; if so, `python -m finagent sync`.
 
@@ -28,6 +31,7 @@ python -m finagent status
 | Last month | `python -m finagent monthly --format html,md,json` |
 | Every expense listed | `python -m finagent itemize --months 3 --all` |
 | Subscriptions | `python -m finagent subscriptions` |
+| Set up budgets | `python -m finagent budget-suggest` (paste the block into `config.toml` after they review it) |
 
 Read the generated `.json` (or `.md`) in `reports/` — not the database — before you answer.
 

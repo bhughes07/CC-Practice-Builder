@@ -43,7 +43,7 @@ class Fee:
 
 
 def fee_type(t: Transaction) -> tuple[str, str] | None:
-    text = f"{t.payee} {t.memo}"
+    text = f"{t.payee} {t.memo} {t.category}"
     for key, label, rx in FEE_TYPES:
         if rx.search(text):
             return key, label

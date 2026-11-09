@@ -162,7 +162,7 @@ _CLASS_RULES: list[tuple[str, re.Pattern]] = [
         r"dining|restaurant|eating out|takeout|take-out|delivery|coffee|fast food|entertainment|\bfun\b|"
         r"shopping|clothing|apparel|amazon|hobb|travel|vacation|subscription|streaming|gift|alcohol|bar|"
         r"recreation|sport|game|book|electronic|decor|personal care|beauty|hair|gym|fitness|kids|toys|"
-        r"activities|pets?\b|movies|music|household|drink|software", re.I)),
+        r"activities|pets?\b|movies|music|household|drink|software|gambl|convenience|tobacco|vape", re.I)),
 ]
 
 
@@ -174,6 +174,12 @@ def category_class(category: str, group: str = "", overrides: dict | None = None
     text = f"{group} {category}".strip()
     if not text:
         return CLASS_OTHER
+    # An explicit Income / Transfers group wins ("Investment Income" is income, not savings).
+    g = group.strip().lower()
+    if g in ("income", "inflow"):
+        return CLASS_INCOME
+    if g in ("transfers", "transfer"):
+        return CLASS_TRANSFER
     # Category name is more specific than the group: check it first.
     for target in (category, text):
         if not target:

@@ -1,16 +1,17 @@
 # finagent: a personal finance agent
 
-finagent reads your budgeting software, itemizes every expense, and tells you what to change. Each suggestion is
-specific and comes with a dollar figure. Then it keeps you on track with weekly and monthly reports.
+finagent connects straight to your bank and credit-card accounts through Plaid. It can also read your budgeting
+software or CSV exports. It itemizes every expense and tells you what to change, with a specific dollar figure for
+each suggestion. Then it keeps you on track with weekly and monthly reports.
 
 ```
 6-month budget review — May 2026 – October 2026
   Over the last 6 months you kept $208/mo — 2% of income (target 15%). Hitting the targets below
-  would free up about $1,316/mo ($15,796/yr), lifting that to ~18%.
+  would free up about $1,319/mo ($15,826/yr), lifting that to ~18%.
 
   Top actions:
-   1. Dining Out is up +105%: $1,038/mo lately vs $505/mo before  ≈$533/mo
-   2. Shopping is up +36%: $914/mo lately vs $672/mo before  ≈$443/mo
+   1. Dining Out is up 105%: $1,038/mo lately vs $505/mo before  ≈$533/mo
+   2. Shopping is up 36%: $914/mo lately vs $672/mo before  ≈$443/mo
    3. Groceries ran over budget in 6 of 6 months  ≈$226/mo
    4. Coffee Shops ran over budget in 6 of 6 months  ≈$46/mo
    5. 5 streaming services cost $72.95/mo ($875/yr)  ≈$38/mo
@@ -50,15 +51,106 @@ finagent demo --open
 `demo` builds a realistic sample household and writes all three reports to `reports/demo/`. It uses its own
 database, so it never mixes with your real data. (Without installing, `python -m finagent demo` works too.)
 
-## Connect your budgeting app
+## Connect your bank
 
 ```bash
 finagent init
 ```
 
-This creates `config.toml` (git-ignored) plus the `data/`, `imports/`, and `reports/` folders.
+This creates `config.toml` (git-ignored) plus the `data/`, `imports/`, and `reports/` folders. It's set up for
+Plaid by default (`[source] type = "plaid"`).
 
-### YNAB: live API (recommended if you use YNAB)
+### Plaid: connect directly to your banks (recommended)
+
+Plaid is the service many budgeting apps use to read bank transactions. You get your own free Plaid account, so
+your data goes from Plaid straight to your computer. No other app sits in the middle.
+
+**1. Create a Plaid account** at [dashboard.plaid.com](https://dashboard.plaid.com/signup). New accounts start on
+Plaid's free **Trial** plan: real bank data, no charge, up to 10 bank logins. One login covers every account you
+have at that bank. Two notes:
+
+- Accounts created **before April 15, 2026** are on the older "Limited Production" tier, which can't connect to
+  Chase, Bank of America, or Wells Fargo. Create a new account if that's you.
+- For banks with their own sign-in page (Chase, Bank of America, Wells Fargo, Capital One…), the Dashboard may ask
+  you to finish your profile first. It also shows which banks are enabled for your account.
+
+**2. Copy your keys** from the Dashboard's *Keys* page. You need the **client ID** and the **Production secret**,
+plus the **Sandbox secret** if you want to try the fake test bank first. Store them as environment variables, never
+in a file. On macOS / Linux, add these to your shell profile:
+
+```bash
+export PLAID_CLIENT_ID="your-client-id"
+```
+
+```bash
+export PLAID_SECRET="your-production-secret"
+```
+
+On Windows (PowerShell), run once and then open a new terminal:
+
+```powershell
+[Environment]::SetEnvironmentVariable("PLAID_CLIENT_ID", "your-client-id", "User")
+```
+
+```powershell
+[Environment]::SetEnvironmentVariable("PLAID_SECRET", "your-production-secret", "User")
+```
+
+**3. Optional: try Plaid's fake test bank first.** This uses your *Sandbox* secret and a separate test database,
+so it never mixes with your real data:
+
+```bash
+PLAID_ENV=sandbox PLAID_SECRET="your-sandbox-secret" finagent plaid sandbox
+```
+
+```bash
+PLAID_ENV=sandbox finagent review --open
+```
+
+**4. Connect your real banks:**
+
+```bash
+finagent plaid link
+```
+
+Your browser opens a page served from your own computer (`http://127.0.0.1:8765/…`). Click **Connect a bank**,
+pick your bank, and sign in through Plaid's secure window. Your bank password goes to Plaid, never to finagent.
+Repeat for each bank and credit card, then click **I'm done**.
+
+**5. Pull your history and set budgets.** Plaid keeps downloading up to 24 months of history for a few minutes
+after you connect, so wait a few minutes, then run:
+
+```bash
+finagent sync
+```
+
+```bash
+finagent budget-suggest
+```
+
+`budget-suggest` prints a `[budgets]` block based on what you actually spend. Fixed bills are set at what they
+cost, lifestyle categories 10% under your average, and one-off purchases go into an "Irregular Expenses" fund. It
+also warns if the total doesn't leave room to save. Edit the block and paste it into `config.toml`. Then run:
+
+```bash
+finagent review --months 6 --open
+```
+
+**Day to day:**
+- `finagent sync` downloads only what changed: new transactions, pending charges that posted, and corrections.
+  The scheduled `finagent run weekly|monthly` does this for you.
+- `finagent plaid list` shows connected banks and accounts.
+- If a bank asks you to sign in again (banks expire access periodically, often yearly), sync tells you to run
+  `finagent plaid link --update "Bank Name"`.
+- `finagent plaid remove "Bank Name"` disconnects a bank. Add `--delete-data` to delete its transactions too.
+
+**What gets counted:** checking, savings, and credit cards. Loan and investment accounts are listed but their
+balances aren't counted as spending. Transfers between your own accounts and credit-card payments are excluded.
+Venmo / Zelle / Cash App payments *to* people count as spending ("Payments to People"), and ATM withdrawals as
+"Cash & ATM". Plaid's categories are mapped to everyday names (Groceries, Dining Out, Gas & Fuel, Giving…). Use
+`[categories.merchant_rules]` with `force_merchant_rules = true` to override any of them.
+
+### YNAB: live API (if you use YNAB)
 
 1. Create a Personal Access Token at **app.ynab.com → Account settings → Developer settings**.
 2. Set `type = "ynab"` under `[source]` in `config.toml`.
@@ -97,7 +189,7 @@ spending as positive numbers). Re-importing the same file, or overlapping date r
 For apps without a CSV export (EveryDollar, for example), download CSVs from each bank and credit-card website.
 Uncategorized rows get a best-guess category from the merchant name.
 
-**No budgets in your app's export?** Add monthly targets in `config.toml`:
+**No budgets in your app's export?** Run `finagent budget-suggest`, or add monthly targets in `config.toml`:
 
 ```toml
 [budgets]
@@ -114,7 +206,9 @@ Uncategorized rows get a best-guess category from the merchant name.
 | `finagent monthly` | Last complete month. `--month 2026-09` for another. |
 | `finagent itemize` | Category totals in the terminal and every transaction to CSV. `--all` prints each transaction. `--month`, `--months`, `--from/--to` set the range. |
 | `finagent subscriptions` | Every recurring charge: cadence, cost per month and per year, next charge date, price changes, cancellations. |
-| `finagent sync` / `import` | Pull from YNAB or (re)import CSV exports. |
+| `finagent sync` / `import` | Pull from Plaid or YNAB, or (re)import CSV exports. |
+| `finagent plaid link` / `list` / `remove` | Connect, list, or disconnect banks. `link --update "Bank"` re-signs-in. |
+| `finagent budget-suggest` | A ready-to-paste `[budgets]` block based on your real spending. |
 | `finagent run weekly\|monthly` | `sync` + report + email. Built for schedulers. |
 | `finagent status` | What's in the database. |
 
@@ -182,7 +276,7 @@ finagent review --ai --open
 **What is sent:** only the aggregated summary (category totals, the detected subscriptions, and the ranked
 findings). No account names, account numbers, or raw bank descriptions are sent. All the math is done locally
 before anything is sent, so the note can't change the numbers. Without `--ai`, nothing leaves your machine
-except the YNAB sync.
+except the sync with your data source (Plaid or YNAB).
 
 ## Use it from Claude Code
 
@@ -210,11 +304,18 @@ bundled `budget-coach` skill runs the right commands, reads the report, and walk
 ## Privacy and security
 
 - Everything runs locally. The database is `data/finance.db`.
+- **Plaid:** bank access tokens are kept in `data/plaid.json`, which only your user account can read. Together
+  with your Plaid keys, they allow *read-only* access to transactions. They can't move money. Anyone with access to
+  your computer account could read them, so keep the computer locked. `finagent plaid remove` revokes a bank's
+  token at Plaid. You can also revoke access from your bank's website or at
+  [my.plaid.com](https://my.plaid.com).
+- The bank-connect page only listens on `127.0.0.1` (your own computer). It uses a random one-time address, rejects
+  requests from other sites, and shuts down when you click **I'm done**.
 - `config.toml`, `data/`, `imports/`, `reports/`, and every `*.csv` / `*.db` are git-ignored. This repository is
   public, so keep it that way. If you want your config under version control, move this folder to a **private**
   repository.
-- Tokens and passwords come only from environment variables (`YNAB_TOKEN`, `FINAGENT_SMTP_PASSWORD`,
-  `ANTHROPIC_API_KEY`).
+- Keys and passwords come only from environment variables (`PLAID_CLIENT_ID`, `PLAID_SECRET`, `YNAB_TOKEN`,
+  `FINAGENT_SMTP_PASSWORD`, `ANTHROPIC_API_KEY`).
 - The YNAB integration is read-only.
 
 ## Development
