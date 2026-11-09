@@ -1,0 +1,73 @@
+# finagent configuration
+# Copy to config.toml (`finagent init` does this). config.toml is git-ignored.
+# Secrets NEVER go in this file — they come from environment variables:
+#   YNAB_TOKEN               YNAB personal access token
+#   FINAGENT_SMTP_PASSWORD   email app password
+#   ANTHROPIC_API_KEY        only if you turn on the AI coach's note
+
+[household]
+name = "Our Household"
+currency = "$"
+week_starts_on = "monday"          # weekly reports cover Mon–Sun (or "sunday")
+
+[source]
+# ynab  → pulls live from the YNAB API (best: includes your budget targets)
+# csv   → reads exports from any app/bank dropped in the imports/ folder
+type = "csv"
+budget_id = "last-used"            # YNAB only: "last-used" or a budget id from `finagent ynab-budgets`
+history_months = 12                # how far back to pull (12 catches annual renewals)
+
+[csv]
+paths = ["imports/*.csv"]
+format = "auto"                    # auto | ynab | monarch | mint | rocket | copilot | generic
+sign = "auto"                      # auto | expenses_negative | expenses_positive
+date_order = "auto"                # auto | mdy | dmy
+
+[storage]
+database = "data/finance.db"
+
+[analysis]
+review_months = 6                  # 3–6 is the sweet spot for the review
+savings_rate_target = 0.15
+min_monthly_impact = 5.0           # hide suggestions worth less than this per month
+large_transaction = 150.0          # floor for "unusual purchase" flags
+# Never suggested as cuts. Matched (case-insensitive) against "<group> <category>".
+protected = ["tithe", "giving", "church", "charity", "donation", "offering", "missions",
+             "saving", "invest", "retirement", "401k", "ira", "emergency fund", "529"]
+
+# Monthly targets, used when your source has no budgets (YNAB provides its own).
+# Category names must match your data exactly.
+[budgets]
+# "Groceries" = 900
+# "Dining Out" = 350
+# "Shopping" = 300
+
+[categories]
+force_merchant_rules = false       # true = merchant rules override existing categories too
+ignore = []                        # categories to drop entirely, e.g. ["Reimbursable"]
+
+[categories.merchant_rules]        # normalized merchant → category (for uncategorized rows)
+# "Chick-fil-A" = "Dining Out"
+# "Venmo" = "Kids Activities"
+
+[categories.class_overrides]       # category → essential | discretionary | giving | savings | debt | fees | other
+# "Kids Activities" = "essential"
+
+[report]
+output_dir = "reports"
+formats = ["html", "md"]           # add "json" for machine-readable output
+
+[email]
+enabled = false                    # `finagent run ...` emails when true; `--email` works any time
+smtp_host = "smtp.gmail.com"       # Outlook.com: smtp-mail.outlook.com · Microsoft 365: smtp.office365.com
+smtp_port = 587
+use_starttls = true
+username = ""                      # your email login
+from_addr = ""                     # defaults to username
+to = []                            # e.g. ["you@example.com", "spouse@example.com"]
+subject_prefix = "[Budget]"
+
+[ai]
+enabled = false                    # or pass --ai per report
+model = "claude-opus-5-5"
+effort = "high"

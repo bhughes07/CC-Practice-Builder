@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finagent"
+version = "1.0.0"
+description = "Personal finance agent: itemize every expense, find the leaks, and get weekly, monthly, and 3–6 month budget reports."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []  # the core uses only the Python standard library
+
+[project.optional-dependencies]
+ai = ["anthropic>=2.7"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+finagent = "finagent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["finagent*"]
+
+[tool.setuptools.package-data]
+finagent = ["config.example.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
