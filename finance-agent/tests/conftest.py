@@ -15,6 +15,15 @@ from finagent.sources.demo import generate  # noqa: E402
 TODAY = date(2026, 11, 9)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_real_keys(tmp_path_factory, monkeypatch):
+    """Never let tests read the developer's real key file or real API keys."""
+    monkeypatch.setenv("FINAGENT_ENV_FILE", str(tmp_path_factory.mktemp("keys") / "env"))
+    for key in ("PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_SANDBOX_SECRET", "PLAID_ENV", "YNAB_TOKEN",
+                "FINAGENT_SMTP_PASSWORD", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+
 @pytest.fixture
 def cfg():
     return load_config(overrides={"household": {"name": "Test Household"}})

@@ -153,9 +153,12 @@ class Config(dict):
     def ynab_token() -> str | None:
         return os.environ.get("YNAB_TOKEN") or os.environ.get("FINAGENT_YNAB_TOKEN")
 
-    @staticmethod
-    def plaid_keys() -> tuple[str | None, str | None]:
-        return os.environ.get("PLAID_CLIENT_ID"), os.environ.get("PLAID_SECRET")
+    def plaid_keys(self) -> tuple[str | None, str | None]:
+        """Client ID + the secret for the active environment (Sandbox has its own secret)."""
+        secret = os.environ.get("PLAID_SECRET")
+        if self.plaid_env == "sandbox" and os.environ.get("PLAID_SANDBOX_SECRET"):
+            secret = os.environ["PLAID_SANDBOX_SECRET"]
+        return os.environ.get("PLAID_CLIENT_ID"), secret
 
     @staticmethod
     def smtp_password() -> str | None:

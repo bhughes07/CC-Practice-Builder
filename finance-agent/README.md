@@ -74,33 +74,27 @@ have at that bank. Two notes:
 - For banks with their own sign-in page (Chase, Bank of America, Wells Fargo, Capital One…), the Dashboard may ask
   you to finish your profile first. It also shows which banks are enabled for your account.
 
-**2. Copy your keys** from the Dashboard's *Keys* page. You need the **client ID** and the **Production secret**,
-plus the **Sandbox secret** if you want to try the fake test bank first. Store them as environment variables, never
-in a file. On macOS / Linux, add these to your shell profile:
+**2. Save your keys.** On the Dashboard's *Keys* page, copy the **client ID**, the **Production secret**, and the
+**Sandbox secret** (for the fake test bank) into finagent:
 
 ```bash
-export PLAID_CLIENT_ID="your-client-id"
+finagent keys --plaid
 ```
 
-```bash
-export PLAID_SECRET="your-production-secret"
-```
+It asks for each key with hidden input, so nothing shows on screen or lands in your shell history. The keys are
+saved to a private file that only your user account can read (`~/.config/finagent/env`, or
+`%APPDATA%\finagent\env` on Windows), and every finagent command loads it automatically. `finagent keys --show`
+lists what's saved without printing any values.
 
-On Windows (PowerShell), run once and then open a new terminal:
+Keep the keys in that file and a password manager, not in a document, note, or email. If you copied them
+somewhere else, delete that copy. If that place was ever shared or synced to a work account, generate a new
+secret on Plaid's *Keys* page and save it again with `finagent keys --plaid`.
 
-```powershell
-[Environment]::SetEnvironmentVariable("PLAID_CLIENT_ID", "your-client-id", "User")
-```
-
-```powershell
-[Environment]::SetEnvironmentVariable("PLAID_SECRET", "your-production-secret", "User")
-```
-
-**3. Optional: try Plaid's fake test bank first.** This uses your *Sandbox* secret and a separate test database,
+**3. Optional: try Plaid's fake test bank first.** This uses your Sandbox secret and a separate test database,
 so it never mixes with your real data:
 
 ```bash
-PLAID_ENV=sandbox PLAID_SECRET="your-sandbox-secret" finagent plaid sandbox
+PLAID_ENV=sandbox finagent plaid sandbox
 ```
 
 ```bash
@@ -154,10 +148,10 @@ Venmo / Zelle / Cash App payments *to* people count as spending ("Payments to Pe
 
 1. Create a Personal Access Token at **app.ynab.com → Account settings → Developer settings**.
 2. Set `type = "ynab"` under `[source]` in `config.toml`.
-3. Put the token in your environment. Never put it in the file.
+3. Save the token with `finagent keys` (the "YNAB personal access token" prompt). Never put it in `config.toml`.
 
 ```bash
-export YNAB_TOKEN="paste-token-here"
+finagent keys
 ```
 
 ```bash
@@ -209,6 +203,7 @@ Uncategorized rows get a best-guess category from the merchant name.
 | `finagent sync` / `import` | Pull from Plaid or YNAB, or (re)import CSV exports. |
 | `finagent plaid link` / `list` / `remove` | Connect, list, or disconnect banks. `link --update "Bank"` re-signs-in. |
 | `finagent budget-suggest` | A ready-to-paste `[budgets]` block based on your real spending. |
+| `finagent keys` | Save API keys to a private file with hidden input. `--plaid` asks for Plaid keys only; `--show` lists what's saved. |
 | `finagent run weekly\|monthly` | `sync` + report + email. Built for schedulers. |
 | `finagent status` | What's in the database. |
 
@@ -226,13 +221,14 @@ username = "you@example.com"
 to = ["you@example.com", "spouse@example.com"]
 ```
 
-Then provide the password through the environment as `FINAGENT_SMTP_PASSWORD`. Use an **app password**: Gmail
+Then save the password with `finagent keys` (it's the "email app password" prompt). Use an **app password**: Gmail
 and Outlook.com require one, and some Microsoft 365 organizations block SMTP sign-in entirely. If that happens,
 use a personal mailbox to send.
 
 **2. Schedule it.**
 
-*macOS / Linux (cron):* put your secrets in `~/.config/finagent/env` (`chmod 600`), then open the crontab:
+*macOS / Linux (cron):* save your keys with `finagent keys` first (scheduled runs read the same private file),
+then open the crontab:
 
 ```bash
 crontab -e
@@ -266,8 +262,10 @@ pip install -e ".[ai]"
 ```
 
 ```bash
-export ANTHROPIC_API_KEY="..."
+finagent keys
 ```
+
+Enter your Anthropic API key at the last prompt.
 
 ```bash
 finagent review --ai --open
@@ -314,8 +312,8 @@ bundled `budget-coach` skill runs the right commands, reads the report, and walk
 - `config.toml`, `data/`, `imports/`, `reports/`, and every `*.csv` / `*.db` are git-ignored. This repository is
   public, so keep it that way. If you want your config under version control, move this folder to a **private**
   repository.
-- Keys and passwords come only from environment variables (`PLAID_CLIENT_ID`, `PLAID_SECRET`, `YNAB_TOKEN`,
-  `FINAGENT_SMTP_PASSWORD`, `ANTHROPIC_API_KEY`).
+- Keys and passwords live only in your private key file (`finagent keys`) or your environment variables, never in
+  `config.toml` or the repository. Environment variables take precedence over the file.
 - The YNAB integration is read-only.
 
 ## Development

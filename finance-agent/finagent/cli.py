@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import os
 import shutil
 import sys
 import time
@@ -656,6 +657,10 @@ def build_parser() -> argparse.ArgumentParser:
     tp = psub.add_parser("sandbox", help="connect Plaid's fake test bank (needs plaid.env = sandbox)")
     tp.add_argument("--username", default="user_transactions_dynamic")
 
+    sp = sub.add_parser("keys", help="save your API keys to a private file (hidden input)")
+    sp.add_argument("--plaid", action="store_true", help="only ask for the Plaid keys")
+    sp.add_argument("--show", action="store_true", help="list which keys are saved (never prints values)")
+
     sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
     sp.add_argument("--months", type=int, help="months to average (default 3)")
     sp.add_argument("--trim", type=float, default=10.0, help="percent below average for discretionary (default 10)")
@@ -664,17 +669,38 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def cmd_keys(args, cfg: Config) -> int:
+    from finagent import keystore
+    if args.show:
+        saved = keystore.read_env_file()
+        _say(f"Key file: {keystore.env_file_path()}")
+        for key, label, _ in keystore.KEYS:
+            where = "saved" if saved.get(key) else ("set in environment" if os.environ.get(key) else "—")
+            _say(f"  {key:24} {where}")
+        return 0
+    only = None
+    if args.plaid:
+        only = ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_SANDBOX_SECRET"]
+    keystore.prompt_and_save(only=only)
+    _say("finagent loads this file automatically. You can now delete any other copy of these keys "
+         "(documents, notes, emails).")
+    return 0
+
+
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "sync": cmd_sync, "import": cmd_import, "itemize": cmd_itemize,
     "subscriptions": cmd_subscriptions, "review": cmd_review, "weekly": cmd_weekly, "monthly": cmd_monthly,
     "run": cmd_run, "demo": cmd_demo, "ynab-budgets": cmd_ynab_budgets, "budget-suggest": cmd_budget_suggest,
     "plaid": cmd_plaid,
+    "keys": cmd_keys,
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        from finagent.keystore import load_env_file
+        load_env_file()
         cfg = load_config(args.config)
         return COMMANDS[args.cmd](args, cfg)
     except (CLIError, FileNotFoundError, ValueError) as err:

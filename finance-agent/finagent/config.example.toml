@@ -1,8 +1,10 @@
 # finagent configuration
 # Copy to config.toml (`finagent init` does this). config.toml is git-ignored.
-# Secrets NEVER go in this file — they come from environment variables:
+# Secrets NEVER go in this file. Save them with `finagent keys` (a private file finagent loads
+# automatically) or set them as environment variables:
 #   PLAID_CLIENT_ID          Plaid client id         (Plaid Dashboard → Keys)
-#   PLAID_SECRET             Plaid secret for the env below
+#   PLAID_SECRET             Plaid Production secret
+#   PLAID_SANDBOX_SECRET     Plaid Sandbox secret (used when env = "sandbox")
 #   YNAB_TOKEN               YNAB personal access token
 #   FINAGENT_SMTP_PASSWORD   email app password
 #   ANTHROPIC_API_KEY        only if you turn on the AI coach's note
