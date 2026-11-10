@@ -165,14 +165,14 @@ def read_sheet(path: Path) -> SheetData:
 
 
 def merge_import(existing: SheetData | None, incoming: SheetData) -> SheetData:
-    """Budget lines come from `incoming`; Income choices (and target, unless imported) are kept from `existing`."""
+    """Budget lines, savings target and giving goal come from `incoming`. The Income tab never does: it's rebuilt
+    from your real deposits, keeping the Yes/No choices already in `existing`."""
     merged = SheetData(lines=list(incoming.lines), budgets=dict(incoming.budgets), blank=set(incoming.blank),
                        groups=dict(incoming.groups), matches=dict(incoming.matches), notes=dict(incoming.notes),
-                       income=dict(incoming.income), income_notes=dict(incoming.income_notes),
                        target_rate=incoming.target_rate, giving_goal=incoming.giving_goal)
     if existing:
-        merged.income = {**existing.income, **merged.income}
-        merged.income_notes = {**existing.income_notes, **merged.income_notes}
+        merged.income = dict(existing.income)
+        merged.income_notes = dict(existing.income_notes)
         merged.target_rate = merged.target_rate or existing.target_rate
         merged.giving_goal = merged.giving_goal if merged.giving_goal is not None else existing.giving_goal
     return merged
@@ -223,6 +223,7 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
     existing = existing or SheetData()
     config_budgets = config_budgets or {}
     money = f'"{currency}"#,##0'
+    money_cents = f'"{currency}"#,##0.00'
     money_signed = f'"{currency}"#,##0;[Red]-"{currency}"#,##0'
     bold, white_bold = Font(bold=True), Font(bold=True, color=WHITE)
     accent_fill, yellow_fill, grey_fill = (PatternFill("solid", fgColor=c) for c in (ACCENT, YELLOW, GREY))
@@ -325,7 +326,9 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         for j, v in enumerate(values, 1):
             c = ws.cell(r, j, v)
             c.border = thin
-            if j in (3, 5, 6, 7):
+            if j == 3:
+                c.number_format = money_cents  # budgets keep their cents ($19.44)
+            elif j in (5, 6, 7):
                 c.number_format = money
             if j == 8:
                 c.number_format = money_signed
@@ -349,7 +352,7 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         for line in leftovers:
             write_row(r, line, None, "", NOT_IN_PLAN, "", False)
             r += 1
-    for col, width in zip("ABCDEFGHIJ", (18, 26, 15, 30, 13, 13, 12, 15, 12, 34)):
+    for col, width in zip("ABCDEFGHIJ", (24, 28, 15, 32, 13, 13, 12, 15, 12, 40)):
         ws.column_dimensions[col].width = width
     ws.freeze_panes = ws.cell(first, 3)
 
