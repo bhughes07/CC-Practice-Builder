@@ -378,13 +378,12 @@ def cmd_init(args, cfg: Config) -> int:
     for d in ("data", "imports", "reports"):
         (root / d).mkdir(exist_ok=True)
     _say("""
-Next steps:
-  YNAB:   set source.type = "ynab" in config.toml, then
-          export YNAB_TOKEN=...   (https://app.ynab.com/settings/developer)
-          finagent sync
-  Others: export transactions as CSV into imports/ (Monarch, Mint, Rocket Money, Copilot,
-          YNAB, or your bank), then `finagent sync` — or `finagent import FILE.csv`
-  Then:   finagent review --months 6 --open
+Next steps (config.toml is set up for Plaid):
+  Plaid:  finagent keys --plaid        save your Plaid keys (hidden input)
+          finagent plaid link          connect each bank in your browser
+          finagent sync                a few minutes later, pull your history
+  YNAB or CSV exports instead? Change [source] type in config.toml (see the comments there).
+  Then:   finagent budget-suggest   and   finagent review --months 6 --open
 """)
     return 0
 

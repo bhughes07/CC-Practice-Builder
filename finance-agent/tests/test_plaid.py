@@ -319,3 +319,18 @@ def test_scheduled_run_surfaces_relink_in_report(tmp_path, monkeypatch, capsys):
     html = next((tmp_path / "r").glob("weekly-*.html")).read_text()
     assert "Some accounts didn&#x27;t sync" in html and "finagent plaid link --update" in html
     assert P.PlaidItems(path).items[0]["status"] == "relink"
+
+
+def test_sandbox_never_writes_to_real_database_even_without_config(tmp_path, monkeypatch, capsys):
+    """Regression: with no config.toml (source.type defaulted), sandbox data landed in finance.db."""
+    fake = FakePlaid({None: {"added": [ptx("t1", 12.5, "TEST", "FOOD_AND_DRINK_COFFEE")], "modified": [],
+                             "removed": [], "next_cursor": "c1", "has_more": False, "accounts": ACCOUNTS,
+                             "transactions_update_status": "HISTORICAL_UPDATE_COMPLETE"}})
+    monkeypatch.setattr("finagent.cli._plaid_client", lambda cfg: client(fake))
+    monkeypatch.setenv("PLAID_ENV", "sandbox")
+    monkeypatch.setattr("finagent.config.home_dir", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main(["plaid", "sandbox"]) == 0
+    assert (tmp_path / "data" / "sandbox.db").exists()
+    assert not (tmp_path / "data" / "finance.db").exists()
+    assert (tmp_path / "data" / "plaid-sandbox.json").exists() and not (tmp_path / "data" / "plaid.json").exists()

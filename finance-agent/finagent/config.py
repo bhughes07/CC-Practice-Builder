@@ -27,7 +27,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "source": {
         # plaid | ynab | csv | demo — or a list, e.g. ["plaid", "csv"]
-        "type": "csv",
+        "type": "plaid",
         "budget_id": "last-used",  # YNAB: "last-used" or a budget UUID
         "history_months": 12,  # how far back `sync` pulls (12 = catch annual renewals)
     },
@@ -139,8 +139,11 @@ class Config(dict):
 
     @property
     def sandbox_mode(self) -> bool:
-        """Plaid's fake test bank is in use — keep its data away from the real database."""
-        return "plaid" in self.sources and self.plaid_env == "sandbox"
+        """Plaid's fake test bank is in use — keep its data away from the real database.
+
+        Depends only on the Plaid environment (not on source.type), so test data can never reach
+        the real database, even before config.toml exists."""
+        return self.plaid_env == "sandbox"
 
     def database_path(self) -> Path:
         db = self["storage"]["database"]
