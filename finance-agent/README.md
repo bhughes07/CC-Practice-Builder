@@ -204,12 +204,22 @@ python3 -m pip install openpyxl
 python3 -m finagent sheet
 ```
 
-- **Budget tab:** one row per category. Type your monthly budget in the yellow column, next to what you actually
-  spent over the last 3 months, the last 6 months, and last month. Totals at the top update as you type: regular
-  income, total budget, what's left over, and your savings rate vs. your target (also editable). Add a row for any
-  category you want to plan for.
+- **Budget tab:** one row per budget line, in your order. Type the monthly amount in the yellow column, next to
+  what you actually spent over the last 3 months, the last 6 months, and last month. Totals at the top update as
+  you type: regular income, total budget, what's left over, your savings rate vs. your target (also editable),
+  and how much spending isn't in your plan yet.
+- **Matches:** use your own line names (like the ones from EveryDollar). In each line's yellow *Matches* cell, list
+  the words that identify its transactions, separated by commas. These can be merchant names (`AT&T`,
+  `Disney, Hulu`) or a bank category (`Groceries`). finagent files every matching transaction under that line
+  automatically. Add an amount to separate charges from the same merchant: `Apple $2.99` for iCloud and `Apple`
+  for everything else from Apple.
+- **Not in your plan yet:** spending that matched none of your lines, with averages. Type a budget next to one to
+  make it a line, or add its name to an existing line's Matches.
 - **Income tab:** every income source with a **Regular income?** Yes/No dropdown. Mark your paychecks *Yes* and
   one-time money (tax refunds, settlements, gifts) *No*. Only *Yes* income counts toward your budget.
+
+Already have your budget lines in another workbook (for example, a starter built from your old budgeting app)?
+`finagent sheet --import ~/Downloads/starter.xlsx` uses its lines and keeps your Income tab choices.
 
 Save it as an Excel file (.xlsx). Every finagent report reads it automatically, so the spreadsheet is your
 budget. `budget-set` and `budget-suggest --save` also write into it. Run `finagent sheet` again any time, with

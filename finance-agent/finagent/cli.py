@@ -809,6 +809,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("budgets", help="your budgets vs. what you actually spend")
     sp = sub.add_parser("sheet", help="create/refresh budget.xlsx — edit budgets and income in Excel")
     sp.add_argument("--no-open", action="store_true", help="don't open it afterwards")
+    sp.add_argument("--import", dest="import_file", metavar="FILE",
+                    help="use the budget lines from another workbook (e.g. a starter); keeps your Income choices")
     sp.add_argument("--trim", type=float, default=10.0, help="percent below average for suggested lifestyle budgets")
 
     sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
@@ -854,6 +856,18 @@ def cmd_sheet(args, cfg: Config) -> int:
         raise CLIError(str(err)) from None
     path = sheet.sheet_path(cfg)
     existing = sheet.read_sheet(path) if path.exists() else None
+    if args.import_file:
+        src = Path(args.import_file).expanduser()
+        if not src.exists():
+            raise CLIError(f"Can't find {src}. Check where your browser saved it (usually Downloads).")
+        incoming = sheet.read_sheet(src)
+        if not incoming.lines:
+            raise CLIError(f"{src.name} has no budget lines on a 'Budget' tab.")
+        existing = sheet.merge_import(existing, incoming)
+        _say(f"Importing {len(incoming.lines)} budget lines from {src.name}"
+             + (" (your Income tab choices are kept)." if path.exists() else "."))
+    if existing:
+        sheet.configure(cfg, existing)  # file spending under your lines before computing averages
     with _store(cfg, args) as store:
         L = _ledger(cfg, store, _today(args))
         A6 = _analysis(L, 6)
@@ -862,9 +876,12 @@ def cmd_sheet(args, cfg: Config) -> int:
         config_budgets = {} if existing else dict(cfg.get("budgets") or {})
         sheet.write_sheet(path, L, suggestions, A6.months, A3.months, cfg.currency, existing, config_budgets,
                           float(cfg["analysis"].get("savings_rate_target", 0.15)))
-    if existing:
-        _say(f"Refreshed {path}: recent averages updated; your budgets, notes and Yes/No choices were kept "
-             f"(previous copy saved as {path.stem}.backup.xlsx).")
+    if existing and not args.import_file:
+        _say(f"Refreshed {path}: recent averages updated; your lines, budgets, matches, notes and Yes/No choices "
+             f"were kept (previous copy saved as {path.stem}.backup.xlsx).")
+    elif args.import_file:
+        _say(f"Updated {path}. Your lines now show what you actually spent on each; anything that matched none "
+             f"of them is listed under \"Not in your plan yet\".")
     else:
         _say(f"Created {path}.")
         _say("  Income tab: mark each source Yes (regular, like your paychecks) or No (one-time money).")

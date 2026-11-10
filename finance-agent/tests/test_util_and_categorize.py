@@ -92,3 +92,26 @@ def test_merchant_rules_and_ignore():
                                      ("Restaurants & Bars", "discretionary"), ("Internal Transfers", "transfer")])
 def test_common_app_categories(cat, cls):
     assert category_class(cat) == cls
+
+
+def test_budget_line_matching_rules():
+    rules = [{"line": "iCloud", "group": "Subs", "terms": ["Apple $2.99"]},
+             {"line": "Apple", "group": "Subs", "terms": ["Apple"]},
+             {"line": "Food Out", "group": "Food", "terms": ["Dining Out", "Starbucks"]},
+             {"line": "Power", "group": "House", "terms": ["Gas & Electric"]}]
+    cfg = {"categories": {"line_rules": rules}}
+    rows = enrich([
+        tx("2026-10-02", -2.99, "APPLE.COM/BILL", "Subscriptions", n=1),
+        tx("2026-10-02", -10.81, "APPLE.COM/BILL", "Subscriptions", n=2),
+        tx("2026-10-03", -42.0, "APPLEBEES 123", "Dining Out", n=3),       # not "Apple": word boundary
+        tx("2026-10-04", -6.5, "STARBUCKS 99", "Coffee Shops", n=4),        # merchant term
+        tx("2026-10-05", -180.0, "TXU ENERGY", "Gas & Electric", "Utilities", n=5),  # category term
+        tx("2026-10-06", -900.0, "CARD PAYMENT", "", is_transfer=True, n=6),
+        tx("2026-10-07", 2450.0, "ACME PAYROLL", "Paycheck", "Income", n=7),
+    ], cfg)
+    got = {t.payee: (t.category, t.category_group) for t in rows}
+    assert got["APPLE.COM/BILL"] in {("iCloud", "Subs"), ("Apple", "Subs")}
+    assert sorted(t.category for t in rows if t.payee == "APPLE.COM/BILL") == ["Apple", "iCloud"]
+    assert got["APPLEBEES 123"] == ("Food Out", "Food") and got["STARBUCKS 99"] == ("Food Out", "Food")
+    assert got["TXU ENERGY"] == ("Power", "House")
+    assert got["CARD PAYMENT"][0] == "" and got["ACME PAYROLL"][0] == "Paycheck"  # transfers & income untouched

@@ -55,6 +55,11 @@ refreshes it (Budget tab: yellow "Monthly budget" column; Income tab: "Regular i
 opens it in Excel. Every command reads it automatically, and `budget-set` / `budget-suggest --save` write into it.
 Ask them to close it in Excel before you refresh it.
 
+Budget lines can be the household's own (e.g. copied from EveryDollar). Each line's *Matches* cell lists the
+merchant names or bank categories that belong to it (comma-separated; `Apple $2.99` matches by amount too), and
+spending that fits no line appears under "Not in your plan yet". When they want a line to capture more spending,
+add the merchant or category to its Matches rather than renaming categories.
+
 Only *regular* income counts (paychecks and scheduled deposits). Tax refunds, settlements and other one-time
 money are reported separately as "Not counted as regular income" — never build a budget on them. If income
 looks wrong, have them check the Income tab's Yes/No choices.

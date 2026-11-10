@@ -46,6 +46,14 @@ def _setup(tmp_path):
     return ["--config", str(cfg), "--today", TODAY.isoformat()]
 
 
+def _cols(ws):
+    hr = next(r for r in range(1, 30) if ws.cell(r, 3).value == "Monthly budget")
+    col = {ws.cell(hr, c).value: c for c in range(1, 15) if ws.cell(hr, c).value}
+    rows = {ws.cell(r, col["Budget line"]).value: r for r in range(hr + 1, ws.max_row + 1)
+            if ws.cell(r, col["Budget line"]).value}
+    return hr, col, rows
+
+
 def test_sheet_create_edit_refresh_roundtrip(tmp_path, capsys):
     base = _setup(tmp_path)
     path = tmp_path / "budget.xlsx"
@@ -55,16 +63,17 @@ def test_sheet_create_edit_refresh_roundtrip(tmp_path, capsys):
     wb = openpyxl.load_workbook(path)
     ws, wi = wb["Budget"], wb["Income"]
     assert ws["C4"].value.startswith("=SUMIFS(Income!") and ws["C5"].value.startswith("=SUM(C")
-    assert ws.cell(11, 3).value == "Monthly budget"
+    assert ws["A10"].value.startswith("Spending not in your plan")
+    hr, col, rows = _cols(ws)
+    assert list(col)[:4] == ["Group", "Budget line", "Monthly budget", "Matches"]
     income = {wi.cell(r, 1).value: wi.cell(r, 7).value for r in range(6, wi.max_row + 1) if wi.cell(r, 1).value}
     assert income == {"Acme Engineering Payroll": "Yes", "Lakeside Schools Payroll": "Yes",
                       "IRS Treas 310 Tax Ref": "No"}
     assert wi.data_validations.dataValidation[0].formula1 == '"Yes,No"'
 
     # --- you edit it in Excel: change a budget, add a note, add your own row, flip an income source
-    rows = {ws.cell(r, 2).value: r for r in range(12, ws.max_row + 1) if ws.cell(r, 2).value}
     ws.cell(rows["Dining Out"], 3).value = 650
-    ws.cell(rows["Dining Out"], 9).value = "2 dinners out a week"
+    ws.cell(rows["Dining Out"], col["Notes"]).value = "2 dinners out a week"
     ws.cell(rows["Coffee Shops"], 3).value = None  # no budget for this one
     new_row = max(rows.values()) + 1
     ws.cell(new_row, 1).value, ws.cell(new_row, 2).value, ws.cell(new_row, 3).value = "Fun", "Date Night", 120
@@ -84,9 +93,9 @@ def test_sheet_create_edit_refresh_roundtrip(tmp_path, capsys):
     assert "kept" in capsys.readouterr().out and (tmp_path / "budget.backup.xlsx").exists()
     wb = openpyxl.load_workbook(path)
     ws, wi = wb["Budget"], wb["Income"]
-    rows = {ws.cell(r, 2).value: r for r in range(12, ws.max_row + 1) if ws.cell(r, 2).value}
+    hr, col, rows = _cols(ws)
     assert ws.cell(rows["Dining Out"], 3).value == 650
-    assert ws.cell(rows["Dining Out"], 9).value == "2 dinners out a week"
+    assert ws.cell(rows["Dining Out"], col["Notes"]).value == "2 dinners out a week"
     assert ws.cell(rows["Coffee Shops"], 3).value is None and ws.cell(rows["Date Night"], 3).value == 120
     assert "No" == next(wi.cell(r, 7).value for r in range(6, wi.max_row + 1)
                         if wi.cell(r, 1).value == "Lakeside Schools Payroll")
@@ -98,13 +107,70 @@ def test_sheet_create_edit_refresh_roundtrip(tmp_path, capsys):
     assert "Dining Out: $650 → $700" in out and "budget.xlsx" in out
     assert (tmp_path / "config.toml").read_text() == before
     ws = openpyxl.load_workbook(path)["Budget"]
-    rows = {ws.cell(r, 2).value: r for r in range(12, ws.max_row + 1) if ws.cell(r, 2).value}
+    hr, col, rows = _cols(ws)
     assert ws.cell(rows["Dining Out"], 3).value == 700 and ws.cell(rows["Gas & Fuel"], 3).value == 280
 
     # --- reports use the sheet's budgets and income choices
     assert main(base + ["review", "--months", "3", "--out", str(tmp_path / "r")]) == 0
     html = next((tmp_path / "r").glob("review-*.html")).read_text()
     assert "Not counted as regular income" in html and "Lakeside Schools Payroll" in html
+
+
+def test_your_own_budget_lines_with_matches(tmp_path, capsys):
+    """Import a hand-made plan (like one copied from another budgeting app): lines + Matches."""
+    base = _setup(tmp_path)
+    starter = tmp_path / "starter.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Budget"
+    ws.append(["Group", "Budget line", "Monthly budget", "Matches", "Notes"])
+    for row in [("Giving", "Church Tithe", 800, "Online Giving - Church", ""),
+                ("Housing", "Mortgage", 2150, "", ""),
+                ("Housing", "Power Bill", 250, "TXU Energy, Electric", ""),
+                ("Subscriptions", "Streaming", 40, "Netflix, Hulu, Disney+", ""),
+                ("Subscriptions", "iCloud", 2.99, "Apple $2.99", ""),
+                ("Subscriptions", "Apps", 9.99, "Apple", ""),
+                ("Lifestyle", "Birthdays", None, "", "plan ahead")]:
+        ws.append(list(row))
+    wb.save(starter)
+
+    assert main(base + ["sheet", "--no-open", "--import", str(starter)]) == 0
+    assert "Importing 7 budget lines" in capsys.readouterr().out
+    ws = openpyxl.load_workbook(tmp_path / "budget.xlsx")["Budget"]
+    hr, col, rows = _cols(ws)
+    order = [ws.cell(r, col["Budget line"]).value for r in range(hr + 1, hr + 8)]
+    assert order == ["Church Tithe", "Mortgage", "Power Bill", "Streaming", "iCloud", "Apps", "Birthdays"]
+    avg = lambda line: ws.cell(rows[line], col["Avg last 3 mo"]).value  # noqa: E731
+    assert avg("Church Tithe") == 800 and avg("Mortgage") == 2150
+    assert avg("iCloud") == 2.99 and avg("Apps") == 9.99  # same merchant, told apart by amount
+    assert 40 < avg("Streaming") < 42  # Netflix ~$17 + Hulu $9.99 + Disney+ $13.99 (Max isn't listed)
+    assert avg("Power Bill") > 100
+    sep = next(r for r in range(hr, ws.max_row + 1) if ws.cell(r, 1).value == "Not in your plan yet")
+    leftovers = {ws.cell(r, 2).value for r in range(sep + 1, ws.max_row + 1) if ws.cell(r, 2).value}
+    assert {"Dining Out", "Groceries", "Shopping"} <= leftovers
+    assert "Mortgage" not in leftovers and "Electric" not in leftovers  # re-filed under Power Bill
+    assert all(ws.cell(r, col["Type"]).value == "not in plan" for r in range(sep + 1, ws.max_row + 1)
+               if ws.cell(r, 2).value)
+
+    # leftovers are informational: refreshing doesn't turn them into lines...
+    assert main(base + ["sheet", "--no-open"]) == 0
+    capsys.readouterr()
+    assert "Dining Out" not in load_sheet_lines(tmp_path / "budget.xlsx")
+    # ...until you give one a budget
+    assert main(base + ["budget-set", "Dining Out=900"]) == 0
+    capsys.readouterr()
+    assert main(base + ["sheet", "--no-open"]) == 0
+    assert "Dining Out" in load_sheet_lines(tmp_path / "budget.xlsx")
+
+    # reports and budgets use your lines
+    assert main(base + ["budgets"]) == 0
+    out = capsys.readouterr().out
+    assert "Power Bill" in out and "Church Tithe" in out and "Electric " not in out
+
+
+def load_sheet_lines(path):
+    from finagent.sheet import read_sheet
+    return read_sheet(path).lines
 
 
 def test_sheet_without_openpyxl_falls_back_with_a_clear_message(tmp_path, monkeypatch, capsys):

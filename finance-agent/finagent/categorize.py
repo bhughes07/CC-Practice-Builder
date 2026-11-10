@@ -163,7 +163,8 @@ _CLASS_RULES: list[tuple[str, re.Pattern]] = [
         r"dining|restaurant|eating out|takeout|take-out|delivery|coffee|fast food|entertainment|\bfun\b|"
         r"shopping|clothing|apparel|amazon|hobb|travel|vacation|subscription|streaming|gift|alcohol|bar|"
         r"recreation|sport|game|book|electronic|decor|personal care|beauty|hair|gym|fitness|kids|toys|"
-        r"activities|pets?\b|movies|music|household|drink|software|gambl|convenience|tobacco|vape", re.I)),
+        r"activities|pets?\b|movies|music|household|drink|software|gambl|convenience|tobacco|vape|lifestyle|"
+        r"personal|misc|birthday|babysit|cleaning|lawn|car wash|haircut|christmas|xmas|holiday", re.I)),
 ]
 
 
@@ -262,6 +263,46 @@ def classify_kind(t: Transaction, cls: str) -> str:
     return KIND_EXPENSE
 
 
+_AMOUNT_TERM = re.compile(r"^(.*?)\s*\$\s*([\d,]+(?:\.\d{1,2})?)\s*$")
+
+
+def compile_line_rules(rules: list[dict] | None) -> list[tuple[re.Pattern, str, float | None, str, str]]:
+    """[{"line", "group", "terms"}] → [(word-boundary pattern, term, exact amount or None, line, group)].
+    A term may end with an amount — "Apple $2.99" — to tell apart several charges from one merchant."""
+    out = []
+    for r in rules or []:
+        for term in r.get("terms", []):
+            term, amount = term.strip(), None
+            m = _AMOUNT_TERM.match(term)
+            if m and m.group(1).strip():
+                term, amount = m.group(1).strip(), float(m.group(2).replace(",", ""))
+            if term:
+                out.append((re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])", re.I), term.lower(), amount,
+                            r["line"], r.get("group", "")))
+    return out
+
+
+def match_line(t: Transaction, compiled) -> tuple[str, str] | None:
+    """Your budget line for a transaction. Most specific wins: merchant + exact amount, then a term found in the
+    merchant / description, then a term naming the bank's category; ties go to the longest term."""
+    text = f"{t.merchant} {t.payee} {t.memo}"
+    best = None
+    for rx, term, amount, line, group in compiled:
+        if amount is not None:
+            if not (rx.search(text) and abs(abs(t.amount) - amount) < 0.005):
+                continue
+            score = (3, len(term))
+        elif rx.search(text):
+            score = (2, len(term))
+        elif term == t.category.strip().lower():
+            score = (1, len(term))
+        else:
+            continue
+        if best is None or score > best[0]:
+            best = (score, line, group)
+    return (best[1], best[2]) if best else None
+
+
 def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Transaction]:
     """Fill merchant / category guesses / class / kind. Returns a new sorted list."""
     cats = (config or {}).get("categories", {}) if config else {}
@@ -269,6 +310,7 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
     force = bool(cats.get("force_merchant_rules", False))
     overrides: dict[str, str] = cats.get("class_overrides", {}) or {}
     ignore = {c.lower() for c in (cats.get("ignore", []) or [])}
+    lines = compile_line_rules(cats.get("line_rules"))
     out: list[Transaction] = []
     for t in txns:
         if t.category.lower() in ignore:
@@ -281,6 +323,12 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
             if guess != "Uncategorized" or not t.category:
                 t.category = guess
         t.cls = category_class(t.category, t.category_group, overrides)
+        # Your own budget lines (from the spreadsheet's Matches column) re-file spending under your names.
+        if lines and not t.is_transfer and t.cls not in (CLASS_INCOME, CLASS_TRANSFER):
+            hit = match_line(t, lines)
+            if hit:
+                t.category, t.category_group = hit[0], hit[1] or t.category_group
+                t.cls = category_class(t.category, t.category_group, overrides)
         t.kind = classify_kind(t, t.cls)
         if t.kind == KIND_INCOME:
             t.cls = CLASS_INCOME

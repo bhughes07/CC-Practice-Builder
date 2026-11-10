@@ -1,19 +1,24 @@
 """Your budget as an Excel workbook you edit; finagent reads it back on every run.
 
 Tabs
-  Budget      one row per category. Edit the yellow "Monthly budget" column. Live totals at the top:
-              regular income, total budget, left over, savings rate vs your target.
-  Income      one row per income source with a Yes/No "Regular income?" dropdown. Only "Yes" counts
-              toward the budget — mark one-time money (tax refunds, settlements) "No".
+  Budget      your budget lines, in your order. Edit the yellow cells:
+                Monthly budget — the plan for the line
+                Matches        — words that identify its transactions (merchant names like "AT&T, Hulu", or a
+                                 bank category like "Groceries"). finagent files every transaction under the
+                                 line it matches, so spending is sorted automatically.
+              Below your lines, "Not in your plan yet" lists real spending that matched no line, with averages.
+              Live totals at the top: regular income, total budget, left over, savings rate vs target.
+  Income      one row per income source with a Yes/No "Regular income?" dropdown. Only "Yes" counts.
   How to use  short instructions.
 
-`finagent sheet` creates the workbook, or refreshes its reference columns (recent averages) while keeping
-everything you typed: budgets, notes, Yes/No choices, and any rows you added yourself.
-Needs the `openpyxl` package (python3 -m pip install openpyxl).
+`finagent sheet` creates the workbook or refreshes its reference columns, keeping everything you typed.
+`finagent sheet --import FILE` replaces the budget lines with another workbook's (e.g. a starter built from
+your old budgeting app), keeping your Income choices. Needs `openpyxl` (python3 -m pip install openpyxl).
 """
 
 from __future__ import annotations
 
+import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import date
@@ -21,14 +26,16 @@ from pathlib import Path
 
 from finagent.budgeting import Suggestion
 from finagent.ledger import Ledger
+from finagent.models import CLASS_DEBT, CLASS_ESSENTIAL, CLASS_FEES, CLASS_GIVING, CLASS_SAVINGS
 from finagent.util import month_end, month_label, month_start, parse_amount
 
 BUDGET, INCOME, HELP = "Budget", "Income", "How to use"
-BUDGET_HEADERS = ["Group", "Category", "Monthly budget", "Avg last 3 mo", "Avg last 6 mo", "Last month",
-                  "Budget vs. recent", "Type", "Notes"]
+BUDGET_HEADERS = ["Group", "Budget line", "Monthly budget", "Matches", "Avg last 3 mo", "Avg last 6 mo",
+                  "Last month", "Budget vs. recent", "Type", "Notes"]
 INCOME_HEADERS = ["Source", "Category", "Deposits", "Avg per month", "Total", "Last deposit", "Regular income?",
                   "Notes"]
-BUDGET_HEADER_ROW, INCOME_HEADER_ROW = 11, 5
+BUDGET_HEADER_ROW, INCOME_HEADER_ROW = 13, 5
+NOT_IN_PLAN, SEPARATOR = "not in plan", "Not in your plan yet"
 ACCENT, YELLOW, GREY, WHITE = "1D6B57", "FFF4CC", "F1F3F5", "FFFFFF"
 
 
@@ -52,9 +59,11 @@ def sheet_path(cfg) -> Path:
 
 @dataclass
 class SheetData:
+    lines: list[str] = field(default_factory=list)  # your budget lines, in your order
     budgets: dict[str, float] = field(default_factory=dict)
-    blank: set[str] = field(default_factory=set)  # categories listed with no budget typed in
+    blank: set[str] = field(default_factory=set)  # lines with no budget typed in
     groups: dict[str, str] = field(default_factory=dict)
+    matches: dict[str, list[str]] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
     income: dict[str, bool] = field(default_factory=dict)
     income_notes: dict[str, str] = field(default_factory=dict)
@@ -72,16 +81,28 @@ def _yes(value) -> bool | None:
     return None
 
 
+def _number(raw) -> float | None:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    return parse_amount(raw)
+
+
 def _header_index(ws, row: int) -> dict[str, int]:
     return {str(c.value).strip(): c.column for c in ws[row] if c.value}
 
 
-def _find_header(ws, needed: tuple[str, ...], default: int) -> int:
+def _find_header(ws, needed: tuple[str, ...], default: int, alternatives: tuple[str, ...] = ()) -> int:
     for r in range(1, min(ws.max_row, 40) + 1):
         values = {str(c.value).strip() for c in ws[r] if c.value}
-        if all(n in values for n in needed):
+        if all(n in values for n in needed) and (not alternatives or values & set(alternatives)):
             return r
     return default
+
+
+def split_terms(text) -> list[str]:
+    return [t.strip() for t in re.split(r"[,;\n]", str(text or "")) if t.strip()]
 
 
 def read_sheet(path: Path) -> SheetData:
@@ -90,29 +111,38 @@ def read_sheet(path: Path) -> SheetData:
     data = SheetData()
     if BUDGET in wb.sheetnames:
         ws = wb[BUDGET]
-        hr = _find_header(ws, ("Category", "Monthly budget"), BUDGET_HEADER_ROW)
+        hr = _find_header(ws, ("Monthly budget",), BUDGET_HEADER_ROW, ("Budget line", "Category"))
         col = _header_index(ws, hr)
+        c_line = col.get("Budget line") or col.get("Category")
         for r in range(hr + 1, ws.max_row + 1):
-            cat = ws.cell(r, col["Category"]).value
-            if not cat or not str(cat).strip():
+            line = ws.cell(r, c_line).value
+            if not line or not str(line).strip():
                 continue
-            cat = str(cat).strip()
-            raw = ws.cell(r, col["Monthly budget"]).value
-            amount = raw if isinstance(raw, (int, float)) and not isinstance(raw, bool) else parse_amount(raw)
-            if amount is None:
-                data.blank.add(cat)
-            elif amount > 0:
-                data.budgets[cat] = float(amount)
+            line = str(line).strip()
+            amount = _number(ws.cell(r, col["Monthly budget"]).value)
+            terms = split_terms(ws.cell(r, col["Matches"]).value) if "Matches" in col else []
+            note = str(ws.cell(r, col["Notes"]).value or "").strip() if "Notes" in col else ""
+            kind = str(ws.cell(r, col["Type"]).value or "").strip().lower() if "Type" in col else ""
+            if kind == NOT_IN_PLAN and amount is None and not terms and not note:
+                continue  # informational row we wrote, untouched by you
+            if line not in data.lines:
+                data.lines.append(line)
+            if amount is None or amount <= 0:
+                data.blank.add(line)
+            else:
+                data.budgets[line] = amount
+            if terms:
+                data.matches[line] = terms
+            if note:
+                data.notes[line] = note
             if "Group" in col and ws.cell(r, col["Group"]).value:
-                data.groups[cat] = str(ws.cell(r, col["Group"]).value).strip()
-            if "Notes" in col and ws.cell(r, col["Notes"]).value:
-                data.notes[cat] = str(ws.cell(r, col["Notes"]).value)
+                data.groups[line] = str(ws.cell(r, col["Group"]).value).strip()
         for r in range(1, hr):
             label = str(ws.cell(r, 1).value or "").strip().lower()
             if label.startswith("target savings rate"):
-                v = ws.cell(r, 3).value
-                if isinstance(v, (int, float)) and not isinstance(v, bool):
-                    data.target_rate = float(v) / 100 if v > 1 else float(v)
+                v = _number(ws.cell(r, 3).value)
+                if v:
+                    data.target_rate = v / 100 if v > 1 else v
     if INCOME in wb.sheetnames:
         ws = wb[INCOME]
         hr = _find_header(ws, ("Source", "Regular income?"), INCOME_HEADER_ROW)
@@ -129,8 +159,34 @@ def read_sheet(path: Path) -> SheetData:
     return data
 
 
+def merge_import(existing: SheetData | None, incoming: SheetData) -> SheetData:
+    """Budget lines come from `incoming`; Income choices (and target, unless imported) are kept from `existing`."""
+    merged = SheetData(lines=list(incoming.lines), budgets=dict(incoming.budgets), blank=set(incoming.blank),
+                       groups=dict(incoming.groups), matches=dict(incoming.matches), notes=dict(incoming.notes),
+                       income=dict(incoming.income), income_notes=dict(incoming.income_notes),
+                       target_rate=incoming.target_rate)
+    if existing:
+        merged.income = {**existing.income, **merged.income}
+        merged.income_notes = {**existing.income_notes, **merged.income_notes}
+        merged.target_rate = merged.target_rate or existing.target_rate
+    return merged
+
+
+def configure(cfg, data: SheetData) -> None:
+    """Make sheet data the source of budgets, budget-line matching, income choices and savings target."""
+    if data.lines:
+        cfg["budgets"] = dict(data.budgets)
+    cats = cfg.setdefault("categories", {})
+    cats["line_rules"] = [{"line": line, "group": data.groups.get(line, ""), "terms": data.matches[line]}
+                          for line in data.lines if data.matches.get(line)]
+    income = cfg.setdefault("income", {})
+    income["sources"] = {**(income.get("sources") or {}), **data.income}
+    if data.target_rate:
+        cfg["analysis"]["savings_rate_target"] = data.target_rate
+
+
 def apply_sheet(cfg) -> str | None:
-    """If the workbook exists, make it the source of budgets and income choices. Returns a warning or None."""
+    """If the workbook exists, make it the source of truth. Returns a warning or None."""
     path = sheet_path(cfg)
     if not path.exists():
         return None
@@ -140,12 +196,7 @@ def apply_sheet(cfg) -> str | None:
         return f"Found {path.name}, but can't read it yet. {err}\nUsing the budgets in config.toml for now."
     except Exception as err:  # a half-saved or non-Excel file shouldn't break reports
         return f"Couldn't read {path.name} ({err}). Using the budgets in config.toml for now."
-    if data.budgets or data.blank:
-        cfg["budgets"] = dict(data.budgets)
-    income = cfg.setdefault("income", {})
-    income["sources"] = {**(income.get("sources") or {}), **data.income}
-    if data.target_rate:
-        cfg["analysis"]["savings_rate_target"] = data.target_rate
+    configure(cfg, data)
     cfg["_sheet"] = str(path)
     return None
 
@@ -155,7 +206,8 @@ def apply_sheet(cfg) -> str | None:
 def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: list[str], months3: list[str],
                 currency: str = "$", existing: SheetData | None = None, config_budgets: dict | None = None,
                 target_rate: float = 0.15) -> Path:
-    """Create or refresh the workbook. Your typed values in `existing` always win over suggestions."""
+    """Create or refresh the workbook. What you typed (in `existing`) always wins over suggestions.
+    `L` must already be built with the budget-line matching in effect, so averages are per line."""
     openpyxl = require_openpyxl()
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.worksheet.datavalidation import DataValidation
@@ -169,55 +221,64 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
     thin = Border(bottom=Side(style="thin", color="E3E7EC"))
     wrap = Alignment(wrap_text=True, vertical="top")
 
-    def avg(cat: str, months: list[str]) -> float:
+    def avg(line: str, months: list[str]) -> float:
         if not months:
             return 0.0
         start, end = month_start(months[0]), month_end(months[-1])
-        return sum(t.outflow for t in L.expenses_between(start, end) if t.category == cat) / len(months)
+        return sum(t.outflow for t in L.expenses_between(start, end) if t.category == line) / len(months)
 
-    last_month = months6[-1:] if months6 else []
     by_cat = {s.category: s for s in suggestions}
-    cats: list[str] = []
-    for s in suggestions:
-        cats.append(s.category)
-    for c in list(existing.budgets) + sorted(existing.blank) + list(config_budgets):
-        if c not in cats:
-            cats.append(c)
+    if existing.lines:  # your plan, in your order
+        plan = list(existing.lines)
+    else:
+        plan = [s.category for s in suggestions] + [c for c in config_budgets if c not in by_cat]
+    in_plan = set(plan)
+    spent6: dict[str, float] = {}
+    if months6:
+        for t in L.expenses_between(month_start(months6[0]), month_end(months6[-1])):
+            spent6[t.category] = spent6.get(t.category, 0.0) + t.outflow
+    leftovers = sorted((c for c, v in spent6.items() if c not in in_plan and v / max(len(months6), 1) >= 5
+                        and L.class_of(c) != CLASS_SAVINGS), key=lambda c: -avg(c, months3))
 
-    def kind(cat: str) -> str:
-        if cat in by_cat:
-            return by_cat[cat].kind
-        if L.is_protected(cat):
+    def kind(line: str) -> str:
+        if line in by_cat and not existing.lines:
+            return by_cat[line].kind
+        if re.search(r"irregular|sinking", line, re.I):
+            return "sinking fund"
+        cls = L.class_of(line)
+        if cls == CLASS_GIVING or L.is_protected(line):
             return "giving"
-        return "your row"
+        if cls in (CLASS_ESSENTIAL, CLASS_DEBT):
+            return "essential"
+        return "fees" if cls == CLASS_FEES else "flexible"
 
-    def group(cat: str) -> str:
-        return existing.groups.get(cat) or (by_cat[cat].group if cat in by_cat else L.group_of(cat))
+    def group(line: str) -> str:
+        return existing.groups.get(line) or (by_cat[line].group if line in by_cat else L.group_of(line))
 
-    def budget_value(cat: str):
-        if cat in existing.budgets:
-            return existing.budgets[cat]
-        if cat in existing.blank:
+    def budget_value(line: str):
+        if line in existing.budgets:
+            return existing.budgets[line]
+        if line in existing.blank:
             return None
-        if cat in config_budgets:
-            return float(config_budgets[cat])
-        return by_cat[cat].target if cat in by_cat else None
-
-    rows = sorted(cats, key=lambda c: (group(c), -avg(c, months3)))
+        if line in config_budgets:
+            return float(config_budgets[line])
+        return by_cat[line].target if line in by_cat else None
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = BUDGET
-    period = (f"{month_label(months6[0])} – {month_label(months6[-1])}" if months6 else "your data")
+    period = f"{month_label(months6[0])} – {month_label(months6[-1])}" if months6 else "your data"
     ws["A1"] = "Household budget"
     ws["A1"].font = Font(bold=True, size=16)
-    ws["A2"] = ("Edit the yellow cells, then save (keep it as an Excel .xlsx file). Every finagent report reads this "
-                "file automatically. Income comes from the Income tab — only sources marked Yes count.")
+    ws["A2"] = ("Edit the yellow cells, then save (keep it an Excel .xlsx file). Every finagent report reads this "
+                "file automatically. 'Matches' = words that identify a line's transactions (merchant names like "
+                "\"AT&T, Hulu\" or a bank category like \"Groceries\"), separated by commas.")
     ws["A2"].alignment = wrap
-    ws.merge_cells("A2:I2")
-    ws.row_dimensions[2].height = 32
+    ws.merge_cells("A2:J2")
+    ws.row_dimensions[2].height = 46
 
-    first, last = BUDGET_HEADER_ROW + 1, BUDGET_HEADER_ROW + max(len(rows), 1) + 200
+    first = BUDGET_HEADER_ROW + 1
+    last = first + len(plan) + len(leftovers) + 250
     income_rng = f"Income!$D${INCOME_HEADER_ROW + 1}:$D$1000"
     regular_rng = f"Income!$G${INCOME_HEADER_ROW + 1}:$G$1000"
     summary = [
@@ -227,6 +288,8 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         ("Savings rate", "=IF(C4>0,C6/C4,0)", "0%", False),
         ("Target savings rate", target_rate, "0%", True),
         ("Still to find to hit the target", "=MAX(0,C4*C8-C6)", money, False),
+        ("Spending not in your plan (3-mo avg)", f'=SUMIFS(E{first}:E{last},I{first}:I{last},"{NOT_IN_PLAN}")',
+         money, False),
     ]
     for i, (label, value, fmt, editable) in enumerate(summary):
         r = 4 + i
@@ -236,32 +299,47 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         c.number_format, c.font = fmt, bold
         if editable:
             c.fill = yellow_fill
-    ws.cell(10, 1, f"Averages are from {period}. Transfers and card payments are excluded; one-time "
-                   f"purchases are included in the averages but covered by an 'Irregular Expenses' line.").font = \
+    ws.cell(BUDGET_HEADER_ROW - 1, 1,
+            f"Averages are from {period}. Transfers and card payments are excluded. Spending is filed under the "
+            f"line whose Matches it fits; anything that fits no line is listed under '{SEPARATOR}'.").font = \
         Font(italic=True, color="5D6B79")
 
     for j, h in enumerate(BUDGET_HEADERS, 1):
         c = ws.cell(BUDGET_HEADER_ROW, j, h)
         c.font, c.fill = white_bold, accent_fill
         c.alignment = Alignment(vertical="center", wrap_text=True)
-    for i, cat in enumerate(rows):
-        r = first + i
-        values = [group(cat), cat, budget_value(cat), round(avg(cat, months3), 2), round(avg(cat, months6), 2),
-                  round(avg(cat, last_month), 2), f'=IF(C{r}="","",C{r}-D{r})', kind(cat),
-                  existing.notes.get(cat, "")]
+
+    def write_row(r: int, line: str, budget, matches: str, typ: str, note: str, editable_line: bool) -> None:
+        values = [group(line), line, budget, matches, round(avg(line, months3), 2), round(avg(line, months6), 2),
+                  round(avg(line, months6[-1:]), 2), f'=IF(C{r}="","",C{r}-E{r})', typ, note]
         for j, v in enumerate(values, 1):
             c = ws.cell(r, j, v)
             c.border = thin
-            if j in (3, 4, 5, 6):
+            if j in (3, 5, 6, 7):
                 c.number_format = money
-            if j == 7:
+            if j == 8:
                 c.number_format = money_signed
-        ws.cell(r, 3).fill = yellow_fill
-        ws.cell(r, 9).fill = yellow_fill
-        if kind(cat) in ("fixed", "giving", "sinking fund"):
-            for j in (1, 2, 8):
+        for j in (3, 4, 10):
+            ws.cell(r, j).fill = yellow_fill
+        if not editable_line:
+            for j in (1, 2, 9):
                 ws.cell(r, j).fill = grey_fill
-    for col, width in zip("ABCDEFGHI", (16, 26, 15, 14, 14, 12, 16, 13, 40)):
+
+    r = first
+    for line in plan:
+        write_row(r, line, budget_value(line), ", ".join(existing.matches.get(line, [])), kind(line),
+                  existing.notes.get(line, ""), True)
+        r += 1
+    if leftovers:
+        r += 1
+        ws.cell(r, 1, SEPARATOR).font = Font(bold=True, color=ACCENT)
+        ws.cell(r, 4, "Type a budget (or add the name to a line's Matches above) to bring these into your plan.") \
+            .font = Font(italic=True, color="5D6B79")
+        r += 1
+        for line in leftovers:
+            write_row(r, line, None, "", NOT_IN_PLAN, "", False)
+            r += 1
+    for col, width in zip("ABCDEFGHIJ", (18, 26, 15, 30, 13, 13, 12, 15, 12, 34)):
         ws.column_dimensions[col].width = width
     ws.freeze_panes = ws.cell(first, 3)
 
@@ -314,16 +392,17 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
     wh = wb.create_sheet(HELP)
     lines = [
         ("How to use this budget", True),
-        ("1. Income tab: mark each source Yes (regular) or No (one-time). Only Yes income counts.", False),
-        ("2. Budget tab: type your monthly budget in the yellow column. Leave a cell empty for no budget.", False),
-        ("   'Budget vs. recent' shows how far each budget is from what you actually spent lately", False),
-        ("   (red = you'll need to spend less than you have been).", False),
-        ("3. Watch the totals at the top: aim for 'Left over each month' to reach your target savings rate.", False),
-        ("4. Add your own category: type it in a new row at the bottom. The name must match the category in", False),
-        ("   your reports exactly (for example 'Dining Out').", False),
-        ("5. Save as Excel (.xlsx). In Numbers, use File → Export To → Excel and replace this file.", False),
-        ("6. Run any finagent report — it reads this file automatically. Run `finagent sheet` (with this", False),
-        ("   file closed) to refresh the averages; your numbers, notes and Yes/No choices are kept.", False),
+        ("1. Income tab: mark each source Yes (regular, like your paychecks) or No (one-time money).", False),
+        ("2. Budget tab: one row per budget line. Type the monthly amount in 'Monthly budget'.", False),
+        ("3. 'Matches': words that identify the line's transactions, separated by commas — merchant names", False),
+        ("   (AT&T, Hulu, Kroger) or a bank category (Groceries, Dining Out). Every matching transaction is", False),
+        ("   filed under that line automatically. Leave it empty if the line's name is already the category.", False),
+        (f"4. '{SEPARATOR}': spending that matched none of your lines. Type a budget next to one to make it a", False),
+        ("   line, or add its name to the Matches of an existing line.", False),
+        ("5. Add a line: type it in a new row under your other lines (Group, Budget line, budget, Matches).", False),
+        ("6. Save as Excel (.xlsx). In Numbers, use File → Export To → Excel and replace this file.", False),
+        ("7. Run any finagent report — it reads this file. Run `finagent sheet` (with this file closed) to", False),
+        ("   refresh the averages; your lines, budgets, matches, notes and Yes/No choices are kept.", False),
         ("Giving and saving lines are yours to set — finagent never suggests cutting them.", False),
     ]
     for i, (text, is_title) in enumerate(lines, 1):
@@ -338,30 +417,31 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
 
 
 def set_budgets(path: Path, changes: dict[str, float]) -> list[tuple[str, float | None, float]]:
-    """Change budget cells in the workbook (0 clears one). Adds a row for a category that isn't listed."""
+    """Change budget cells in the workbook (0 clears one). A line that isn't listed is added at the end."""
     openpyxl = require_openpyxl()
     from openpyxl.styles import PatternFill
     wb = openpyxl.load_workbook(path)
     ws = wb[BUDGET]
-    hr = _find_header(ws, ("Category", "Monthly budget"), BUDGET_HEADER_ROW)
+    hr = _find_header(ws, ("Monthly budget",), BUDGET_HEADER_ROW, ("Budget line", "Category"))
     col = _header_index(ws, hr)
-    c_cat, c_bud = col["Category"], col["Monthly budget"]
+    c_line, c_bud = col.get("Budget line") or col.get("Category"), col["Monthly budget"]
     report = []
     for name, amount in changes.items():
         row = next((r for r in range(hr + 1, ws.max_row + 1)
-                    if str(ws.cell(r, c_cat).value or "").strip().lower() == name.lower()), None)
+                    if str(ws.cell(r, c_line).value or "").strip().lower() == name.lower()), None)
         if row is None:
-            row = max((r for r in range(hr + 1, ws.max_row + 1) if ws.cell(r, c_cat).value), default=hr) + 1
-            ws.cell(row, c_cat, name)
+            row = max((r for r in range(hr + 1, ws.max_row + 1) if ws.cell(r, c_line).value), default=hr) + 1
+            ws.cell(row, c_line, name)
             if "Group" in col:
                 ws.cell(row, col["Group"], "Other")
             ws.cell(row, c_bud).number_format = ws.cell(hr + 1, c_bud).number_format
             ws.cell(row, c_bud).fill = PatternFill("solid", fgColor=YELLOW)
             old = None
         else:
-            v = ws.cell(row, c_bud).value
-            old = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+            old = _number(ws.cell(row, c_bud).value)
         ws.cell(row, c_bud, amount if amount > 0 else None)
-        report.append((str(ws.cell(row, c_cat).value), old, amount))
+        if "Type" in col and str(ws.cell(row, col["Type"]).value or "").lower() == NOT_IN_PLAN and amount > 0:
+            ws.cell(row, col["Type"], "flexible")  # it's part of the plan now
+        report.append((str(ws.cell(row, c_line).value), old, amount))
     wb.save(path)
     return report
