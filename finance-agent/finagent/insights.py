@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from finagent.detectors import FEE_ADVICE, Fee, find_duplicates, find_fees, find_unusual
+from finagent.detectors import FEE_ADVICE, Fee, find_duplicates, find_fees, find_repeat_billing, find_unusual
 from finagent.ledger import Ledger
 from finagent.models import (
     CLASS_DEBT, CLASS_DISCRETIONARY, CLASS_ESSENTIAL, CLASS_FEES, CLASS_GIVING, CLASS_INCOME, CLASS_TRANSFER,
@@ -96,6 +96,7 @@ class Analysis:
                 t.flags.add("recurring")
         self.fees: list[Fee] = find_fees(ledger.expenses, self.start, self.end)
         self.duplicates = find_duplicates(ledger.expenses, self.start, self.end)
+        self.repeat_billing = find_repeat_billing(ledger.expenses, self.start, self.end)
         self.unusual = find_unusual(ledger.expenses, self.start, self.end,
                                     float(cfg.get("large_transaction", 150.0)), self.recurring_ids)
         self.unusual_ids = {t.id for t, _ in self.unusual}
@@ -474,6 +475,21 @@ class Analysis:
                 action="Check the receipt/statement. If it's a duplicate, ask the merchant to reverse it or dispute "
                        "it with your card issuer (most allow 60 days).",
                 one_time=round(b.outflow, 2), severity="high", area=b.category, kind="recover"))
+
+        for r in self.repeat_billing[:4]:
+            extra = sum(t.outflow for t in r.extras)
+            months = sorted({t.month for t in r.extras})
+            self.insights.append(Insight(
+                key=f"repeat:{r.merchant}:{r.amount}",
+                title=f"{r.merchant} billed {self.m(r.amount)} more than once in the same few days: "
+                      f"{len(r.extras)} extra charges ({self.m(extra)})",
+                detail=f"{len(r.extras)} charges of {self.m(r.amount)} came within days of an identical one, in "
+                       f"{len(months)} different month{'s' if len(months) != 1 else ''} "
+                       f"({r.account or 'same account'}; latest {fmt_date(r.extras[-1].date)}).",
+                action=f"Check how many {r.merchant} plans or accounts are billed to this card. If you only have one, "
+                       f"ask {r.merchant} to refund the extra charges or dispute them with the card issuer.",
+                one_time=round(extra, 2), severity="high", area=r.extras[0].category, kind="recover",
+                evidence=[f"{fmt_date(t.date)} {self.m(t.outflow)}" for t in r.extras[:8]]))
 
     def _sinking_fund_insight(self) -> None:
         total = sum(t.outflow for t, _ in self.unusual)

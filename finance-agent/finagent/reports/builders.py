@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, timedelta
 
-from finagent.detectors import find_duplicates, find_fees, find_unusual
+from finagent.detectors import find_duplicates, find_fees, find_repeat_billing, find_unusual
 from finagent.insights import Analysis, Insight
 from finagent.ledger import Ledger
 from finagent.models import CLASS_DEBT, CLASS_GIVING, CLASS_SAVINGS, Transaction
@@ -219,6 +219,13 @@ def build_weekly(ledger: Ledger, ws: date, we: date, A: Analysis | None) -> Repo
                               detail=f"{fmt_date(a.date)} and {fmt_date(b.date)}",
                               action="Check the statement and dispute it if you were charged twice.",
                               one_time=b.outflow, severity="high", kind="recover"))
+    for rb in find_repeat_billing(ledger.expenses, ws, we):
+        alerts.append(Insight(key=f"repeat:{rb.extras[-1].id}",
+                              title=f"{rb.merchant} billed {m(rb.amount)} again: {len(rb.extras)} extra this week",
+                              detail=", ".join(fmt_date(t.date) for t in rb.extras) + f" · {rb.account}",
+                              action=f"It keeps happening. Check how many {rb.merchant} plans are on this card and "
+                                     "ask for a refund of the extras.",
+                              one_time=sum(t.outflow for t in rb.extras), severity="high", kind="recover"))
     floor = float(ledger.config.get("analysis", {}).get("large_transaction", 150.0))
     for t, why in find_unusual(ledger.expenses, ws, we, floor, recurring_ids):
         alerts.append(Insight(key=f"big:{t.id}", title=f"Large purchase: {m(t.outflow)} at {t.merchant}",

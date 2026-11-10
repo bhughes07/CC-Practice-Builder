@@ -1,4 +1,5 @@
-"""Point detectors: bank fees, possible duplicate charges, unusually large transactions."""
+"""Point detectors: bank fees, possible duplicate charges (one-offs and subscriptions billed again and again),
+unusually large transactions."""
 
 from __future__ import annotations
 
@@ -85,6 +86,55 @@ def find_duplicates(expenses: list[Transaction], start: date, end: date) -> list
                 b.flags.add("possible duplicate")
     pairs.sort(key=lambda p: p[1].date)
     return pairs
+
+
+SUBSCRIPTION_LIKE = re.compile(
+    r"subscri|stream|software|membership|music|video|app store|cable|netflix|spotify|hulu|disney|youtube|"
+    r"paramount|peacock|audible|icloud|apple\.com|amazon prime|sirius", re.I)
+
+
+@dataclass
+class RepeatBilling:
+    """A subscription charged more than once within a few days, in more than one billing cycle."""
+    merchant: str
+    amount: float
+    account: str
+    extras: list[Transaction]  # every charge after the first in each burst, inside the window
+    bursts: int
+
+
+def find_repeat_billing(expenses: list[Transaction], start: date, end: date) -> list[RepeatBilling]:
+    """Identical subscription charges that arrive in bursts (e.g. four $35.71 charges from a streaming service in
+    the last days of each month). find_duplicates treats more than 4 identical charges as routine, so it can't see
+    these. One burst could be a plan change; two or more is a pattern worth checking."""
+    lookback = start - timedelta(days=180)
+    groups: dict[tuple[str, float, str], list[Transaction]] = defaultdict(list)
+    for t in expenses:
+        if not (lookback <= t.date <= end and t.outflow >= 10):
+            continue
+        if SUBSCRIPTION_LIKE.search(f"{t.merchant} {t.orig_category} {t.category} {t.payee}"):
+            groups[(t.merchant or t.payee, round(t.outflow, 2), t.account)].append(t)
+    out = []
+    for (merchant, amount, account), txns in groups.items():
+        if len(txns) <= 4:  # find_duplicates covers these
+            continue
+        txns.sort(key=lambda t: (t.date, t.id))
+        bursts, cur = [], [txns[0]]
+        for t in txns[1:]:
+            if (t.date - cur[-1].date).days <= 3:
+                cur.append(t)
+            else:
+                bursts.append(cur)
+                cur = [t]
+        bursts.append(cur)
+        multi = [b for b in bursts if len(b) > 1]
+        extras = [t for b in multi for t in b[1:] if start <= t.date <= end]
+        if len(multi) >= 2 and extras:
+            for t in extras:
+                t.flags.add("possible duplicate")
+            out.append(RepeatBilling(merchant, amount, account, extras, len(multi)))
+    out.sort(key=lambda r: -sum(t.outflow for t in r.extras))
+    return out
 
 
 def find_unusual(expenses: list[Transaction], start: date, end: date, floor: float = 150.0,

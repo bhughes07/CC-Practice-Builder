@@ -374,6 +374,9 @@ bundled `budget-coach` skill runs the right commands, reads the report, and walk
   specific fix.
 - **Possible double charges:** same merchant and same amount within 3 days, excluding routine purchases like
   the same coffee order.
+- **Subscriptions billed more than once:** a streaming or app subscription that charges the same amount several
+  times within a few days, in more than one month. The first charge in each burst counts as the real one; the
+  rest are totalled as possible refunds.
 - **Unusual purchases:** charges well above your normal for that category or merchant. The total feeds a
   suggested "irregular expenses" sinking fund.
 - **Unused budget:** money that's budgeted but never spent, which you can redirect.

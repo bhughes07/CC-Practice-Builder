@@ -94,3 +94,27 @@ def test_transfers_excluded_from_spending(demo):
     payees = {t.payee for t in ledger.expenses_in_month("2026-10")}
     assert "Transfer to Savings" not in payees and "VISA CARD PAYMENT" not in payees
     assert 7000 < oct_spend < 11000
+
+
+def test_subscription_billed_in_bursts_is_flagged(cfg):
+    from finagent.detectors import find_repeat_billing
+    from finagent.insights import Analysis
+    from finagent.ledger import Ledger
+    burst = {"2026-05": [29, 29], "2026-06": [29, 29], "2026-07": [30, 30, 30, 30, 31], "2026-08": [23, 30, 30, 31, 31],
+             "2026-09": [23, 29, 29, 30, 30]}
+    rows = [tx(f"{mo}-{d:02d}", -35.71, "HLU*HULUPLUS hulu.com/billCA", "Streaming & Movies", account="Visa ••1",
+               n=i * 10 + j) for i, (mo, days) in enumerate(burst.items()) for j, d in enumerate(days)]
+    rows += [tx(f"2026-{m:02d}-18", -21.64, "Hulu 877-8244858 CA", "Streaming & Movies", account="Visa ••1", n=m)
+             for m in range(5, 11)]                                               # a second plan: once a month
+    rows += [tx(f"2026-{m:02d}-07", -25.92, "DISNEY PLUS", "Streaming & Movies", n=m) for m in range(5, 11)]
+    rows += [tx(f"2026-{m:02d}-{d:02d}", -16.50, "STARBUCKS", "Coffee", n=m * 100 + d)  # two coffees, not a sub
+             for m in range(5, 11) for d in (3, 3, 4)]
+    rows = enrich(rows, cfg)
+    found = find_repeat_billing(rows, date(2026, 5, 1), date(2026, 10, 31))
+    assert [(r.merchant, r.amount, len(r.extras), r.bursts) for r in found] == [("Hulu", 35.71, 12, 5)]
+    assert round(sum(t.outflow for t in found[0].extras), 2) == 428.52
+
+    L = Ledger(rows, [], cfg, date(2026, 11, 10))
+    A = Analysis(L, L.available_months(6))
+    top = next(i for i in A.insights if i.key.startswith("repeat:"))
+    assert top.kind == "recover" and top.one_time == 428.52 and "12 extra charges" in top.title
