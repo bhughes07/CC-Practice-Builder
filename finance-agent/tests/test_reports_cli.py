@@ -196,3 +196,37 @@ def test_irregular_fund_is_set_aside_not_unused(cfg):
     assert unused is None or "Irregular" not in unused.detail  # set aside, not "unused"
     fund = next(i for i in A.insights if i.key == "sinking-fund")
     assert "Irregular Expenses fund" in fund.title and "Create" not in fund.action
+
+
+def test_budget_set_and_budgets(tmp_path, capsys):
+    import tomllib
+
+    from finagent.config import EXAMPLE_CONFIG
+    from finagent.store import Store
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(EXAMPLE_CONFIG.read_text())
+    txns, _ = generate(TODAY)
+    with Store(tmp_path / "data" / "finance.db") as store:
+        store.upsert_transactions(txns)
+    base = ["--config", str(cfg), "--today", TODAY.isoformat()]
+    assert main(base + ["budgets"]) == 0
+    assert "No budgets saved yet" in capsys.readouterr().out
+    assert main(base + ["budget-suggest", "--save"]) == 0
+    capsys.readouterr()
+
+    # Adjust two, add one (any capitalisation, "$" and commas fine), remove one
+    assert main(base + ["budget-set", "dining out=$900", "Groceries=1,100", "Clothing=0",
+                        "Date Night=120", "--new"]) == 0
+    out = capsys.readouterr().out
+    assert "Dining Out: $925 → $900" in out and "Groceries: $1,175 → $1,100" in out
+    assert "Clothing: removed" in out and "Date Night: $120 (new)" in out and "leaves" in out
+    data = tomllib.loads(cfg.read_text())["budgets"]
+    assert data["Dining Out"] == 900 and data["Groceries"] == 1100 and data["Date Night"] == 120
+    assert "Clothing" not in data and cfg.read_text().count("[budgets]") == 1
+    assert "# avg" in cfg.read_text()  # comments preserved
+
+    # Typos are caught instead of silently creating a new budget
+    assert main(base + ["budget-set", "Dinning Out=800"]) == 2
+    assert 'Did you mean "Dining Out"' in capsys.readouterr().err
+    assert main(base + ["budgets"]) == 0
+    assert "Dining Out" in capsys.readouterr().out

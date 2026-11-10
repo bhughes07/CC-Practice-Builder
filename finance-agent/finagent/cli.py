@@ -505,6 +505,128 @@ def save_budgets(cfg: Config, block: list[str]) -> Path:
     return path
 
 
+def _config_path(cfg: Config) -> Path:
+    path = cfg.path or (home_dir() / "config.toml")
+    if not path.exists():
+        shutil.copy(EXAMPLE_CONFIG, path)
+    return path
+
+
+def set_budgets(cfg: Config, changes: dict[str, float]) -> tuple[Path, list[tuple[str, float | None, float]]]:
+    """Set (or with 0, remove) individual lines in config.toml's [budgets] table. Returns (path, [(name, old, new)])."""
+    import re
+    import tomllib
+    path = _config_path(cfg)
+    text = path.read_text(encoding="utf-8")
+    header = re.compile(r"^\[budgets\][ \t]*(#.*)?$", re.M)
+    if not header.search(text):
+        text = text.rstrip("\n") + "\n\n[budgets]\n"
+    m = header.search(text)
+    nxt = re.search(r"^\[(?!budgets\])", text[m.end():], re.M)
+    end = m.end() + (nxt.start() if nxt else len(text) - m.end())
+    lines = text[m.end():end].split("\n")
+    current = tomllib.loads(text).get("budgets", {})
+    report = []
+    for name, amount in changes.items():
+        line_rx = re.compile(r'^\s*(?:"' + re.escape(name) + r'"|' + re.escape(name) + r')\s*=\s*[-0-9.]+', re.I)
+        idx = next((i for i, ln in enumerate(lines) if line_rx.match(ln)), None)
+        old = next((v for k, v in current.items() if k.lower() == name.lower()), None)
+        value = f"{amount:.2f}".rstrip("0").rstrip(".")
+        if amount <= 0:
+            if idx is not None:
+                lines.pop(idx)
+        elif idx is not None:
+            lines[idx] = re.sub(r"=\s*[-0-9.]+", f"= {value}", lines[idx], count=1)
+        else:
+            insert_at = len(lines)
+            while insert_at > 0 and not lines[insert_at - 1].strip():
+                insert_at -= 1
+            key = name.replace('"', '\\"')
+            lines.insert(insert_at, f'"{key}" = {value}')
+        report.append((name, old, amount))
+    updated = text[:m.end()] + "\n".join(lines) + text[end:]
+    try:
+        tomllib.loads(updated)
+    except tomllib.TOMLDecodeError as err:
+        raise CLIError(f"Couldn't update {path} safely ({err}); it was left unchanged.") from None
+    path.with_name(path.name + ".bak").write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    path.write_text(updated, encoding="utf-8")
+    return path, report
+
+
+def _budget_summary(cfg: Config, args) -> None:
+    """Budgets vs. what you actually spend, and what's left to save."""
+    import re
+    budgets = {k: float(v) for k, v in (cfg.get("budgets") or {}).items()}
+    if not budgets:
+        _say("No budgets saved yet. Run `finagent budget-suggest --save` to start from your real spending.")
+        return
+    cur = cfg.currency
+    with _store(cfg, args) as store:
+        A = None
+        if store.count():
+            L = Ledger(store.transactions(), [], cfg, _today(args))
+            A = _analysis(L, 3, required=False)
+    rows = []
+    for cat, bud in sorted(budgets.items(), key=lambda kv: -kv[1]):
+        avg = A.category_avg(cat) if A and cat in A.cat_matrix else (0.0 if A else None)
+        if re.search(r"irregular|sinking", cat, re.I):
+            rows.append([cat, money_auto(bud, cur), "—", "set aside for one-offs"])
+            continue
+        diff = "" if avg is None else (f"{money_auto(avg - bud, cur)} over" if avg > bud + 0.5 else
+                                       f"{money_auto(bud - avg, cur)} under" if bud > avg + 0.5 else "on target")
+        rows.append([cat, money_auto(bud, cur), "—" if avg is None else money_auto(avg, cur), diff])
+    _print_table(["Category", "Budget", "Avg (3 mo)", "Recent spending vs budget"], rows, "lrrl")
+    total = sum(budgets.values())
+    _say(f"\nTotal budget: {money_auto(total, cur)}/mo")
+    if A and A.avg_income:
+        left = A.avg_income - total
+        _say(f"Average income: {money_auto(A.avg_income, cur)}/mo → leaves {money_auto(left, cur)}/mo to save "
+             f"({left / A.avg_income * 100:.0f}% of income; target {A.savings_target * 100:.0f}%).")
+
+
+def cmd_budgets(args, cfg: Config) -> int:
+    _budget_summary(cfg, args)
+    return 0
+
+
+def cmd_budget_set(args, cfg: Config) -> int:
+    import difflib
+
+    from finagent.util import parse_amount
+    known: list[str] = []
+    with _store(cfg, args) as store:
+        if store.count():
+            known = sorted({t.category for t in Ledger(store.transactions(), [], cfg, _today(args)).expenses})
+    existing = list((cfg.get("budgets") or {}).keys())
+    changes: dict[str, float] = {}
+    for item in args.items:
+        name, sep, raw = item.rpartition("=")
+        amount = parse_amount(raw)
+        if not sep or not name.strip() or amount is None:
+            raise CLIError(f'Couldn\'t read "{item}". Use the form "Category=Amount", e.g. "Dining Out=900".')
+        name = name.strip().strip('"')
+        match = next((c for c in existing + known if c.lower() == name.lower()), None)
+        if match is None:
+            close = difflib.get_close_matches(name, existing + known, n=1, cutoff=0.75)
+            if close and not args.new:
+                raise CLIError(f'There\'s no category called "{name}". Did you mean "{close[0]}"? '
+                               f'(Use --new to add a brand-new category anyway.)')
+        changes[match or name] = amount
+    path, report = set_budgets(cfg, changes)
+    cur = cfg.currency
+    for name, old, new in report:
+        if new <= 0:
+            _say(f"  {name}: removed")
+        elif old is None:
+            _say(f"  {name}: {money_auto(new, cur)} (new)")
+        else:
+            _say(f"  {name}: {money_auto(old, cur)} → {money_auto(new, cur)}")
+    _say(f"Saved to {path}.\n")
+    _budget_summary(load_config(str(path)), args)
+    return 0
+
+
 # --------------------------------------------------------------------------- plaid
 
 def _plaid_client(cfg: Config):
@@ -694,6 +816,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--check", action="store_true",
                     help="check the Plaid keys' format and where they come from (never prints values)")
 
+    sp = sub.add_parser("budget-set", help='set budgets, e.g. budget-set "Dining Out=900" "Shopping=750"')
+    sp.add_argument("items", nargs="+", metavar='"Category=Amount"', help="use 0 to remove a budget line")
+    sp.add_argument("--new", action="store_true", help="allow a category name that isn't in your data yet")
+    sub.add_parser("budgets", help="your budgets vs. what you actually spend")
+
     sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
     sp.add_argument("--months", type=int, help="months to average (default 3)")
     sp.add_argument("--trim", type=float, default=10.0, help="percent below average for discretionary (default 10)")
@@ -733,6 +860,8 @@ COMMANDS = {
     "run": cmd_run, "demo": cmd_demo, "ynab-budgets": cmd_ynab_budgets, "budget-suggest": cmd_budget_suggest,
     "plaid": cmd_plaid,
     "keys": cmd_keys,
+    "budget-set": cmd_budget_set,
+    "budgets": cmd_budgets,
 }
 
 
