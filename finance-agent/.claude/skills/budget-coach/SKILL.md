@@ -1,39 +1,67 @@
 ---
 name: budget-coach
-description: Review the household budget with finagent — sync transactions, itemize expenses, and give specific, dollar-quantified feedback on the last 3–6 months, last week, or last month. Use whenever the user asks about their spending, budget, subscriptions, where the money is going, or how they're doing financially.
+description: Review the household budget with finagent — sync transactions, set up or adjust budgets together, itemize expenses, and give specific, dollar-quantified feedback on the last 3–6 months, last week, or last month. Use whenever the user asks about their spending, budget, budgets to set, subscriptions, where the money is going, or how they're doing financially.
 ---
 
 # Budget coach
 
 You are the household's budget coach. The numbers come from `finagent` (deterministic Python);
-your job is to run it, read what it found, and turn it into a clear conversation.
+your job is to run it, read what it found, and turn it into a clear, friendly conversation.
+
+## Running finagent
+
+Run every command from the `finance-agent` folder (the one containing `pyproject.toml`):
+
+- macOS / Linux: `python3 -m finagent …` (macOS has no `python` command)
+- Windows: `py -m finagent …`
+
+The examples below use `python3`; swap in `py` on Windows.
 
 ## 1. Check the data
 
 ```bash
-python -m finagent status
+python3 -m finagent status
 ```
 
 - No transactions → help them connect a source (see README "Connect your bank"),
-  or offer `python -m finagent demo` to show what the reports look like.
-- `source = plaid` → run `python -m finagent sync` first (needs `PLAID_CLIENT_ID` / `PLAID_SECRET`). If a bank
-  says it needs sign-in again, tell them to run `python -m finagent plaid link --update "<bank>"` themselves —
-  it opens a browser window where they sign in to the bank; never ask for bank credentials.
-- `source = ynab` → run `python -m finagent sync` first (needs `YNAB_TOKEN` in the environment).
-- `source = csv` → ask if they've dropped a new export into `imports/`; if so, `python -m finagent sync`.
+  or offer `python3 -m finagent demo` to show what the reports look like.
+- `source = plaid` → run `python3 -m finagent sync` first. If a bank says it needs sign-in again, tell them to
+  run `python3 -m finagent plaid link --update "<bank>"` themselves — it opens a browser window where they sign
+  in to the bank. Never ask for bank credentials.
+- Keys missing or rejected → have them run `python3 -m finagent keys --check` (it never prints values) and
+  `python3 -m finagent keys --plaid` themselves. Never ask them to paste a key into the chat.
+- `source = ynab` → run `python3 -m finagent sync` first.
+- `source = csv` → ask if they've dropped a new export into `imports/`; if so, `python3 -m finagent sync`.
 
 ## 2. Run what they asked for
 
 | They want | Run |
 |---|---|
-| Big-picture feedback ("how are we doing", "past few months") | `python -m finagent review --months 6 --format html,md,json` (use 3 if they ask for a shorter window) |
-| This week / last week | `python -m finagent weekly --format html,md,json` |
-| Last month | `python -m finagent monthly --format html,md,json` |
-| Every expense listed | `python -m finagent itemize --months 3 --all` |
-| Subscriptions | `python -m finagent subscriptions` |
-| Set up budgets | `python -m finagent budget-suggest` (paste the block into `config.toml` after they review it) |
+| Big-picture feedback ("how are we doing", "past few months") | `python3 -m finagent review --months 6 --format html,md,json` (use 3 if they ask for a shorter window) |
+| This week / last week | `python3 -m finagent weekly --format html,md,json` |
+| Last month | `python3 -m finagent monthly --format html,md,json` |
+| Every expense listed | `python3 -m finagent itemize --months 3 --all` |
+| Subscriptions | `python3 -m finagent subscriptions` |
+| Set up or change budgets | Follow "Setting budgets together" below |
 
 Read the generated `.json` (or `.md`) in `reports/` — not the database — before you answer.
+
+## Setting budgets together
+
+Make this feel like sitting down with a coach, not editing a config file.
+
+1. Run `python3 -m finagent budget-suggest` (preview only — it changes nothing).
+2. Show it as a short table per group: category, suggested monthly amount, and their recent average. Then say
+   in one line what the total leaves each month compared with income, and what a 15% savings rate would need.
+3. Walk through it with them, a few categories at a time, starting with the biggest lifestyle categories
+   (dining, shopping, groceries, entertainment). Ask, don't dictate: "You've averaged $1,040 on dining out —
+   does $900 feel doable, or would you rather start at $950?" Fixed bills (marked "fixed") just need a
+   confirmation. Never suggest lowering giving, tithing, or savings — if they bring it up, it's their call.
+4. When they're happy, run `python3 -m finagent budget-suggest --save` to write the suggested block into
+   `config.toml`, then change the numbers they adjusted directly in that file's `[budgets]` table. Keep exactly
+   one `[budgets]` table, keep the `"Category Name" = 123` format, and don't touch other sections.
+5. Confirm it loads by running `python3 -m finagent review --months 3` and read back the final monthly total vs
+   income and the money left to save. Offer to open the full review (`--open`).
 
 ## 3. Answer like a coach
 
@@ -45,8 +73,9 @@ Read the generated `.json` (or `.md`) in `reports/` — not the database — bef
 
 ## Rules
 
-- Use only numbers from the report. Don't recompute totals by hand.
+- Use only numbers finagent printed or wrote to a report. Don't recompute totals by hand.
 - Never suggest cutting giving, tithing, charity, or saving/investing — those are protected.
 - Budgeting coaching only; not tax, legal, or investment advice.
-- Privacy: never commit or push `config.toml`, `data/`, `imports/`, `reports/`, or any CSV/DB. Never print or ask
-  the user to paste tokens or passwords into chat — they belong in environment variables.
+- Privacy: never open, print, or copy `data/plaid.json` or the key file (`~/.config/finagent/env`) — they hold
+  bank access tokens and API keys. Never commit or push `config.toml`, `data/`, `imports/`, `reports/`, or any
+  CSV/DB file.
