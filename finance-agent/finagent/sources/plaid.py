@@ -54,6 +54,20 @@ class PlaidError(RuntimeError):
 Transport = Callable[[str, dict], dict]
 
 
+def friendly(err: "PlaidError", env: str = "production") -> str:
+    """Turn Plaid's key errors into a next step the user can take."""
+    text = f"{err.message} {err.display or ''}".lower()
+    which = "Sandbox" if env == "sandbox" else "Production"
+    if err.code == "INVALID_FIELD" and ("secret" in text or "client_id" in text):
+        part = "client ID" if "client_id" in text else f"{which} secret"
+        return (f"Plaid says your {part} isn't in the right format. In Terminal, run "
+                f"`python3 -m finagent keys --check` to see what's wrong with it.")
+    if err.code == "INVALID_API_KEYS":
+        return (f"Plaid didn't accept your client ID and {which} secret together. Copy both again from Plaid's "
+                f"Keys page and save them with `python3 -m finagent keys --plaid`, then try again.")
+    return err.display or err.message or err.code
+
+
 class PlaidClient:
     """Minimal Plaid API client (standard library only)."""
 
@@ -528,7 +542,7 @@ class LinkSession:
                 access_token=self.update_item["access_token"] if self.update_item else None)
             return {"link_token": token}
         except PlaidError as err:
-            return {"error": err.display or err.message or err.code}
+            return {"error": friendly(err, self.client.env)}
 
     def _exchange(self, body: dict) -> dict:
         metadata = body.get("metadata") or {}

@@ -659,6 +659,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("keys", help="save your API keys to a private file (hidden input)")
     sp.add_argument("--plaid", action="store_true", help="only ask for the Plaid keys")
     sp.add_argument("--show", action="store_true", help="list which keys are saved (never prints values)")
+    sp.add_argument("--check", action="store_true",
+                    help="check the Plaid keys' format and where they come from (never prints values)")
 
     sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
     sp.add_argument("--months", type=int, help="months to average (default 3)")
@@ -670,6 +672,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cmd_keys(args, cfg: Config) -> int:
     from finagent import keystore
+    if args.check:
+        ok = keystore.check(_say)
+        _say("\nAll Plaid keys look right." if ok else
+             "\nFix: copy the key again from Plaid's Keys page (use its copy button), then run "
+             "`finagent keys --plaid` and paste it at that prompt. Press Enter at the others to keep them.")
+        return 0 if ok else 1
     if args.show:
         saved = keystore.read_env_file()
         _say(f"Key file: {keystore.env_file_path()}")
@@ -712,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
             _err(str(err))
             return 2
         if isinstance(err, PlaidError):
-            _err(f"Plaid: {err.display or err.message or err.code}")
+            from finagent.sources.plaid import friendly
+            _err(f"Plaid: {friendly(err, os.environ.get('PLAID_ENV', 'production'))}")
             return 2
         raise
