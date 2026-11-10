@@ -12,6 +12,10 @@
 *.ofx
 *.qfx
 *.qif
+*.xlsx
+*.xls
+*.numbers
+~$*
 .env
 .env.*
 

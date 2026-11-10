@@ -13,6 +13,11 @@ Personal finance agent. Python 3.11+, standard library only (optional `anthropic
   detection, detectors, ranked `Insight`s with $ impact. `recurring.py`, `detectors.py` — the building blocks.
 - `finagent/reports/` — `builders.py` (weekly / monthly / review → typed sections), `render_html.py`
   (email-safe, table-based), `render_md.py`, `model.py`.
+- `finagent/budgeting.py` — suggested budgets from real spending. `finagent/sheet.py` — budget.xlsx (Budget +
+  Income tabs) written with openpyxl and read back on every run; when it exists it's the source of budgets
+  and of which income sources count as regular.
+- Income: `Ledger.incomes` is *regular* income only (paychecks / scheduled deposits, or the spreadsheet's
+  "Yes" sources); refunds, settlements and other one-time money live in `Ledger.one_time_incomes`.
 - `finagent/cli.py` — every command. `finagent/ai.py` — optional Claude-written coach's note.
 
 ## Conventions
@@ -22,6 +27,7 @@ Personal finance agent. Python 3.11+, standard library only (optional `anthropic
 - Tests: `python -m pytest -q`. Add a test for every detector / importer change.
 
 ## Never commit
-`config.toml`, `data/` (includes `plaid.json` with bank access tokens), `imports/`, `reports/`, `*.db`, `*.csv`
+`config.toml`, `budget.xlsx`, `data/` (includes `plaid.json` with bank access tokens), `imports/`, `reports/`,
+`*.db`, `*.csv`
 (except `tests/fixtures/`). The repository is public. Secrets (`PLAID_CLIENT_ID`, `PLAID_SECRET`, `YNAB_TOKEN`,
 `FINAGENT_SMTP_PASSWORD`, `ANTHROPIC_API_KEY`) live in environment variables only.

@@ -41,6 +41,20 @@ def _delta_text(m, current: float, reference: float | None, label: str, lower_is
 
 # --------------------------------------------------------------------------- shared sections
 
+def one_time_income_callout(ledger: Ledger, start: date, end: date, m) -> dict | None:
+    """One-time money (refunds, settlements) is shown, never counted as income you can live on."""
+    items = ledger.one_time_between(start, end)
+    if not items:
+        return None
+    total = sum(t.amount for t in items)
+    listing = " · ".join(f"{t.merchant or t.payee} {m(t.amount)} ({fmt_date(t.date)})" for t in items[:6])
+    return {"type": "callout", "tone": "info", "title": f"Not counted as regular income: {m(total)}",
+            "body": f"{listing}. One-time money (tax refunds, settlements, gifts) and any source you marked "
+                    f"\"No\" in your budget spreadsheet are left out, so your budget and savings rate reflect "
+                    f"only the income you can count on. Give this money a job before it disappears into everyday "
+                    f"spending: emergency fund, paying down debt, or a planned purchase."}
+
+
 def itemization_section(ledger: Ledger, txns: list[Transaction], title: str, note: str = "") -> dict:
     groups: dict[str, dict[str, list[Transaction]]] = defaultdict(lambda: defaultdict(list))
     for t in txns:
@@ -293,7 +307,10 @@ def build_weekly(ledger: Ledger, ws: date, we: date, A: Analysis | None) -> Repo
 
     week_sorted = sorted(week, key=lambda t: (t.date, -t.outflow))
     r.add("transactions", title=f"Every expense this week ({len(week)})", rows=week_sorted,
-          note=f"Income received this week: {m(income_week)}." if income_week else "")
+          note=" ".join(x for x in (
+              f"Regular income received this week: {m(income_week)}." if income_week else "",
+              f"Not counted as regular income: {m(sum(t.amount for t in ledger.one_time_between(ws, we)))}."
+              if ledger.one_time_between(ws, we) else "") if x))
     r.itemized = week_sorted
     r.summary = {
         "kind": "weekly", "week": fmt_range(ws, we), "spent": total, "flexible": flex, "typical_flexible_week": typical,
@@ -347,9 +364,11 @@ def build_monthly(ledger: Ledger, month: str, A: Analysis) -> Report:
 
     s_prev, t_prev = _delta_text(m, spend, prev_spend, "last month")
     kpis = [
-        {"label": "Income", "value": m(income),
-         "sub": _delta_text(m, income, ledger.income_month(prev) if prev_spend is not None else None,
-                            "last month", lower_is_good=False)[0]},
+        {"label": "Regular income", "value": m(income),
+         "sub": (f"+ {m(sum(t.amount for t in ledger.one_time_between(ms, me)))} not counted (one-time)"
+                 if ledger.one_time_between(ms, me) else
+                 _delta_text(m, income, ledger.income_month(prev) if prev_spend is not None else None,
+                             "last month", lower_is_good=False)[0])},
         {"label": "Spending", "value": m(spend), "sub": s_prev, "tone": t_prev},
         {"label": "Kept" if net >= 0 else "Overspent", "value": m(abs(net)),
          "sub": f"{rate * 100:.0f}% of income (target {A.savings_target * 100:.0f}%)" if rate is not None else "",
@@ -363,6 +382,9 @@ def build_monthly(ledger: Ledger, month: str, A: Analysis) -> Report:
         kpis.append({"label": "vs. 3-month average", "value": m(abs(spend - avg3)),
                      "sub": f"{'above' if spend > avg3 else 'below'} {m(avg3)}", "tone": "bad" if spend > avg3 else "good"})
     r.add("kpis", items=kpis)
+    once = one_time_income_callout(ledger, ms, me, m)
+    if once:
+        r.sections.append(once)
 
     if A.insights:
         r.add("insights", title="What to do next", items=A.insights[:6], total_monthly=A.potential_monthly,
@@ -442,7 +464,7 @@ def build_review(ledger: Ledger, A: Analysis) -> Report:
     fixed = A.fixed_monthly()
     rate = A.savings_rate
     kpis = [
-        {"label": "Avg monthly income", "value": m(A.avg_income), "sub": f"{A.n} months"},
+        {"label": "Regular income / mo", "value": m(A.avg_income), "sub": f"{A.n}-month average, one-time money excluded"},
         {"label": "Avg monthly spending", "value": m(A.avg_spend),
          "sub": f"{A.avg_spend / A.avg_income * 100:.0f}% of income" if A.avg_income else ""},
         {"label": "Kept per month", "value": m(A.avg_income - A.avg_spend),
@@ -455,6 +477,9 @@ def build_review(ledger: Ledger, A: Analysis) -> Report:
                                                        if A.potential_one_time else ""), "tone": "accent"},
     ]
     r.add("kpis", items=kpis)
+    once = one_time_income_callout(ledger, A.start, A.end, m)
+    if once:
+        r.sections.append(once)
 
     plan = [i for i in A.insights if i.kind in ("save", "recover")][:5]
     if plan:

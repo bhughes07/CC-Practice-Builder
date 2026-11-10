@@ -48,6 +48,17 @@ large_transaction = 150.0          # floor for "unusual purchase" flags
 protected = ["tithe", "giving", "church", "charity", "donation", "offering", "missions",
              "saving", "invest", "retirement", "401k", "ira", "emergency fund", "529"]
 
+# Which income counts as "regular" — the income your budget is built on. One-time money
+# (tax refunds, settlements, gifts, single large deposits) is shown in reports but never counted.
+# Your budget spreadsheet's Income tab (Yes/No per source) overrides all of this.
+[income]
+regular = []                       # if set, ONLY matching deposits count, e.g. ["church payroll"]
+one_time = []                      # extra patterns to always treat as one-time, e.g. ["settlement"]
+
+# `finagent sheet` creates this Excel workbook. When it exists, it's where your budgets live.
+[budget_sheet]
+path = "budget.xlsx"
+
 # Monthly targets, used when your source has no budgets (Plaid, banks, most CSVs).
 # YNAB provides its own. Category names must match your data exactly —
 # `finagent budget-suggest` prints a ready-to-paste block based on what you really spend.

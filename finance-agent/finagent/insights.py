@@ -562,6 +562,9 @@ class Analysis:
             "wins": [{"title": w.title, "detail": w.detail} for w in self.wins],
             "potential_monthly_savings": self.potential_monthly,
             "potential_one_time_recovery": self.potential_one_time,
+            "one_time_income_not_counted": [
+                {"source": t.merchant or t.payee, "amount": t.amount, "date": t.date.isoformat()}
+                for t in self.ledger.one_time_between(self.start, self.end)],
         }
 
 

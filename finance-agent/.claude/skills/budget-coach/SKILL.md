@@ -50,6 +50,15 @@ Read the generated `.json` (or `.md`) in `reports/` — not the database — bef
 
 Make this feel like sitting down with a coach, not editing a config file.
 
+If `budget.xlsx` exists (or they'd like a spreadsheet), budgets live there: `python3 -m finagent sheet` creates or
+refreshes it (Budget tab: yellow "Monthly budget" column; Income tab: "Regular income?" Yes/No per source) and
+opens it in Excel. Every command reads it automatically, and `budget-set` / `budget-suggest --save` write into it.
+Ask them to close it in Excel before you refresh it.
+
+Only *regular* income counts (paychecks and scheduled deposits). Tax refunds, settlements and other one-time
+money are reported separately as "Not counted as regular income" — never build a budget on them. If income
+looks wrong, have them check the Income tab's Yes/No choices.
+
 1. Run `python3 -m finagent budget-suggest` (preview only — it changes nothing).
 2. Show it as a short table per group: category, suggested monthly amount, and their recent average. Then say
    in one line what the total leaves each month compared with income, and what a 15% savings rate would need.
@@ -57,11 +66,11 @@ Make this feel like sitting down with a coach, not editing a config file.
    (dining, shopping, groceries, entertainment). Ask, don't dictate: "You've averaged $1,040 on dining out —
    does $900 feel doable, or would you rather start at $950?" Fixed bills (marked "fixed") just need a
    confirmation. Never suggest lowering giving, tithing, or savings — if they bring it up, it's their call.
-4. When they're happy, run `python3 -m finagent budget-suggest --save` to write the suggested block into
-   `config.toml`, then change the numbers they adjusted directly in that file's `[budgets]` table. Keep exactly
-   one `[budgets]` table, keep the `"Category Name" = 123` format, and don't touch other sections.
-5. Confirm it loads by running `python3 -m finagent review --months 3` and read back the final monthly total vs
-   income and the money left to save. Offer to open the full review (`--open`).
+4. When they're happy, run `python3 -m finagent budget-suggest --save`, then apply each number they changed
+   with `python3 -m finagent budget-set "Dining Out=900" "Shopping=750"` (0 removes a line). Both write to
+   `budget.xlsx` if it exists, otherwise to `config.toml`.
+5. Run `python3 -m finagent budgets` and read back the final monthly total vs regular income and the money left
+   to save. Offer to open the full review (`python3 -m finagent review --months 6 --open`).
 
 ## 3. Answer like a coach
 

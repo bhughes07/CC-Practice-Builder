@@ -178,6 +178,7 @@ def generate(today: date | None = None, months: int = 12, seed: int = 7) -> tupl
     add(dup, -89.99, "BEST BUY 00004523", "Shopping", "Lifestyle")
     add(dup + timedelta(days=1), -89.99, "BEST BUY 00004523", "Shopping", "Lifestyle")
     add(today - timedelta(days=52), 45.99, "AMZN Mktp US Refund", "Shopping", "Lifestyle", memo="Return")
+    add(today - timedelta(days=118), 2140.00, "IRS TREAS 310 TAX REF", "Tax Refund", "Income", "Checking")
     lw = today - timedelta(days=today.weekday() + 7)  # Monday of last week
     add(lw + timedelta(days=2), -3.50, "NON-NETWORK ATM FEE", "Bank Fees", "Financial", "Checking")
     add(lw + timedelta(days=5), -164.27, "SQ *LAKESIDE STEAKHOUSE", "Dining Out", "Food")

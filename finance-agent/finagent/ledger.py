@@ -13,6 +13,15 @@ from finagent.models import (
 )
 from finagent.util import complete_months, month_end, month_key, month_start
 
+# Money that arrives once and shouldn't be planned around: tax refunds, settlements, windfalls.
+ONE_TIME_INCOME = re.compile(r"tax refund|\birs\b|treas 310|tax ref|settlement|lawsuit|legal|inheritance|"
+                             r"stimulus|lottery|insurance claim|claim payment|bonus|gift", re.I)
+PAYCHECK = re.compile(r"paycheck|payroll|salary|wages|dir dep|direct dep", re.I)
+
+
+def payer(t: Transaction) -> str:
+    return (t.merchant or t.payee or "Unknown").strip()
+
 
 class Ledger:
     def __init__(self, txns: Iterable[Transaction], budgets: Iterable[Budget], config: dict, today: date):
@@ -21,7 +30,14 @@ class Ledger:
         self.currency = config.get("household", {}).get("currency", "$")
         self.all = [t for t in enrich(txns, config) if t.date < today or t.date == today]
         self.expenses = [t for t in self.all if t.kind == KIND_EXPENSE]
-        self.incomes = [t for t in self.all if t.kind == KIND_INCOME]
+        # Regular income (what you can live on) vs one-time money (refunds, settlements, windfalls).
+        # Every budget and report uses regular income only.
+        all_income = [t for t in self.all if t.kind == KIND_INCOME]
+        regular = self._regular_income_rule(all_income, config.get("income") or {})
+        self.incomes = [t for t in all_income if regular(t)]
+        self.one_time_incomes = [t for t in all_income if not regular(t)]
+        for t in self.one_time_incomes:
+            t.flags.add("one-time income")
 
         self.groups: dict[str, str] = {}
         for t in self.all:
@@ -55,6 +71,55 @@ class Ledger:
 
         patterns = config.get("analysis", {}).get("protected", []) or []
         self._protected_rx = re.compile("|".join(re.escape(p) for p in patterns), re.I) if patterns else None
+
+    @staticmethod
+    def _regular_income_rule(incomes: list[Transaction], rules: dict):
+        """Decide, per deposit, whether it's regular income. Precedence: your spreadsheet's Yes/No per
+        source → config patterns → recognisable one-time money → paychecks → anything that arrives on a
+        schedule (3+ deposits over 6+ weeks from the same payer)."""
+        sources = {str(k).strip().lower(): bool(v) for k, v in (rules.get("sources") or {}).items()}
+        def rx(key):
+            pats = [p for p in (rules.get(key) or []) if p]
+            return re.compile("|".join(re.escape(p) for p in pats), re.I) if pats else None
+        regular_rx, one_time_rx = rx("regular"), rx("one_time")
+        dates: dict[str, list[date]] = defaultdict(list)
+        for t in incomes:
+            dates[payer(t).lower()].append(t.date)
+
+        def is_regular(t: Transaction) -> bool:
+            key = payer(t).lower()
+            if key in sources:
+                return sources[key]
+            text = f"{t.payee} {t.merchant} {t.category} {t.memo}"
+            if one_time_rx and one_time_rx.search(text):
+                return False
+            if regular_rx:
+                return bool(regular_rx.search(text))
+            if ONE_TIME_INCOME.search(text):
+                return False
+            if PAYCHECK.search(text):
+                return True
+            ds = dates[key]
+            return len(ds) >= 3 and (max(ds) - min(ds)).days >= 42
+
+        return is_regular
+
+    def one_time_between(self, start: date, end: date) -> list[Transaction]:
+        return [t for t in self.one_time_incomes if start <= t.date <= end]
+
+    def income_sources(self, start: date, end: date) -> list[dict]:
+        """Every income payer in the window, with whether it currently counts as regular."""
+        rows: dict[str, dict] = {}
+        regular_ids = {t.id for t in self.incomes}
+        for t in self.incomes + self.one_time_incomes:
+            if not (start <= t.date <= end):
+                continue
+            r = rows.setdefault(payer(t), {"source": payer(t), "category": t.category, "count": 0, "total": 0.0,
+                                           "last": t.date, "regular": t.id in regular_ids})
+            r["count"] += 1
+            r["total"] += t.amount
+            r["last"] = max(r["last"], t.date)
+        return sorted(rows.values(), key=lambda r: (not r["regular"], -r["total"]))
 
     # ------------------------------------------------------------------ coverage
     @property

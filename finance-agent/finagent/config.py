@@ -57,6 +57,14 @@ DEFAULTS: dict[str, Any] = {
         "large_transaction": 150.0,  # floor for "unusual transaction" flags
         "savings_rate_target": 0.15,
     },
+    # Which income counts as "regular" (what the budget is built on). Your budget spreadsheet's Income
+    # tab overrides these per source. Patterns are matched against payee / category text.
+    "income": {
+        "regular": [],  # if set, ONLY matching deposits count as regular, e.g. ["church payroll"]
+        "one_time": [],  # always one-time, e.g. ["IRS", "settlement"] (common ones are built in)
+        "sources": {},  # filled from the spreadsheet: {"Payer name": true/false}
+    },
+    "budget_sheet": {"path": "budget.xlsx"},
     # Monthly targets used when your budgeting app doesn't supply budgets
     # (YNAB does). Keys are category names exactly as they appear in your data.
     "budgets": {},

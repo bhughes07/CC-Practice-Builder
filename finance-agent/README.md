@@ -191,6 +191,42 @@ Uncategorized rows get a best-guess category from the merchant name.
 "Dining Out" = 350
 ```
 
+## Your budget spreadsheet
+
+Prefer working in a spreadsheet? `finagent sheet` creates **`budget.xlsx`** and opens it in Excel. It needs one
+free add-on, installed once:
+
+```bash
+python3 -m pip install openpyxl
+```
+
+```bash
+python3 -m finagent sheet
+```
+
+- **Budget tab:** one row per category. Type your monthly budget in the yellow column, next to what you actually
+  spent over the last 3 months, the last 6 months, and last month. Totals at the top update as you type: regular
+  income, total budget, what's left over, and your savings rate vs. your target (also editable). Add a row for any
+  category you want to plan for.
+- **Income tab:** every income source with a **Regular income?** Yes/No dropdown. Mark your paychecks *Yes* and
+  one-time money (tax refunds, settlements, gifts) *No*. Only *Yes* income counts toward your budget.
+
+Save it as an Excel file (.xlsx). Every finagent report reads it automatically, so the spreadsheet is your
+budget. `budget-set` and `budget-suggest --save` also write into it. Run `finagent sheet` again any time, with
+the file closed, to refresh the averages. Your budgets, notes, Yes/No choices, and added rows are kept, and the
+previous copy is saved as `budget.backup.xlsx`.
+
+- **Numbers (Mac):** use *File → Export To → Excel* and replace `budget.xlsx`. Numbers saves in its own format
+  otherwise.
+- **Privacy:** the file is git-ignored, so it stays on your computer.
+
+### Regular vs. one-time income
+
+Budgets and savings rates use **regular income only**: paychecks, and deposits that arrive on a schedule. Tax
+refunds (IRS), settlements, gifts, and other one-off deposits are listed in reports as *"Not counted as regular
+income"*, with a nudge to give that money a job. The spreadsheet's Income tab has the final say. You can also
+set rules in `config.toml` (`[income] regular = [...]` / `one_time = [...]`).
+
 ## Commands
 
 | Command | What it does |
@@ -202,7 +238,10 @@ Uncategorized rows get a best-guess category from the merchant name.
 | `finagent subscriptions` | Every recurring charge: cadence, cost per month and per year, next charge date, price changes, cancellations. |
 | `finagent sync` / `import` | Pull from Plaid or YNAB, or (re)import CSV exports. |
 | `finagent plaid link` / `list` / `remove` | Connect, list, or disconnect banks. `link --update "Bank"` re-signs-in. |
-| `finagent budget-suggest` | A ready-to-paste `[budgets]` block based on your real spending. |
+| `finagent budget-suggest` | Suggested budgets from your real spending. `--save` writes them for you. |
+| `finagent sheet` | Create or refresh `budget.xlsx`, where you edit budgets and income choices in Excel. |
+| `finagent budgets` | Your budgets next to what you actually spend, and what's left to save. |
+| `finagent budget-set "Dining Out=900"` | Change one or more budgets. `=0` removes one. |
 | `finagent keys` | Save API keys to a private file with hidden input. `--plaid` asks for Plaid keys only; `--show` lists what's saved. |
 | `finagent run weekly\|monthly` | `sync` + report + email. Built for schedulers. |
 | `finagent status` | What's in the database. |

@@ -416,38 +416,12 @@ def cmd_demo(args, cfg: Config) -> int:
 
 def cmd_budget_suggest(args, cfg: Config) -> int:
     """Print a ready-to-paste [budgets] block based on what you actually spend."""
-    import math
-
-    from finagent.models import CLASS_DISCRETIONARY, CLASS_FEES, CLASS_SAVINGS, CLASS_TRANSFER
+    from finagent.budgeting import suggest
     with _store(cfg, args) as store:
         L = _ledger(cfg, store, _today(args))
         A = _analysis(L, args.months or 3)
         cur = L.currency
-        trim = max(0.0, min(0.5, args.trim / 100))
-        window = A.window_expenses()
-        rows = []
-        for cat, row in A.cat_matrix_core.items():
-            avg = sum(row.values()) / A.n
-            cls = L.class_of(cat)
-            if avg < 5 or cls in (CLASS_SAVINGS, CLASS_TRANSFER, CLASS_FEES):
-                continue
-            spent = [t for t in window if t.category == cat and t.id not in A.unusual_ids]
-            total = sum(t.outflow for t in spent) or 1
-            fixed = sum(t.outflow for t in spent if t.id in A.recurring_ids) / total >= 0.7
-            if fixed:  # bills and subscriptions: budget what they cost
-                target, note = math.ceil(avg / 5) * 5, "fixed"
-            elif cls == CLASS_DISCRETIONARY and not L.is_protected(cat):
-                goal = avg * (1 - trim)
-                step = 5 if goal < 100 else 25
-                target, note = max(step, round(goal / step) * step), f"-{args.trim:.0f}%"
-            else:
-                step = 5 if avg < 100 else 25
-                target, note = max(step, round(avg / step) * step), ""
-            rows.append((L.group_of(cat), cat, target, avg, note))
-        one_offs = sum(t.outflow for t, _ in A.unusual) / A.n
-        if one_offs >= 25:
-            rows.append(("Planning", "Irregular Expenses", math.ceil(one_offs / 25) * 25, one_offs, "sinking fund"))
-        rows.sort(key=lambda r: (r[0], -r[3]))
+        rows = [(x.group, x.category, x.target, x.average, x.note) for x in suggest(L, A, args.trim)]
 
         lines = ["[budgets]",
                  f"# Suggested by `finagent budget-suggest` on {_today(args).isoformat()} from "
@@ -471,7 +445,11 @@ def cmd_budget_suggest(args, cfg: Config) -> int:
         elif A.avg_income:
             lines.append(f"# Leaves {money_auto(left, cur)}/mo to save ({left / A.avg_income * 100:.0f}% of income).")
         _say("\n".join(lines))
-        if args.save:
+        if args.save and cfg.get("_sheet"):
+            from finagent import sheet
+            sheet.set_budgets(Path(cfg["_sheet"]), {r[1]: r[2] for r in rows})
+            _say(f"\nSaved these budgets into your spreadsheet {cfg['_sheet']} (other rows and notes kept).")
+        elif args.save:
             path = save_budgets(cfg, lines)
             _say(f"\nSaved these budgets to {path} (previous version kept as {path.name}.bak). "
                  f"Edit that file any time, or run this again to start over.")
@@ -576,6 +554,7 @@ def _budget_summary(cfg: Config, args) -> None:
         diff = "" if avg is None else (f"{money_auto(avg - bud, cur)} over" if avg > bud + 0.5 else
                                        f"{money_auto(bud - avg, cur)} under" if bud > avg + 0.5 else "on target")
         rows.append([cat, money_auto(bud, cur), "—" if avg is None else money_auto(avg, cur), diff])
+    _say(f"Budgets from {cfg.get('_sheet') or 'config.toml'}\n")
     _print_table(["Category", "Budget", "Avg (3 mo)", "Recent spending vs budget"], rows, "lrrl")
     total = sum(budgets.values())
     _say(f"\nTotal budget: {money_auto(total, cur)}/mo")
@@ -613,7 +592,12 @@ def cmd_budget_set(args, cfg: Config) -> int:
                 raise CLIError(f'There\'s no category called "{name}". Did you mean "{close[0]}"? '
                                f'(Use --new to add a brand-new category anyway.)')
         changes[match or name] = amount
-    path, report = set_budgets(cfg, changes)
+    if cfg.get("_sheet"):
+        from finagent import sheet
+        path = Path(cfg["_sheet"])
+        report = sheet.set_budgets(path, changes)
+    else:
+        path, report = set_budgets(cfg, changes)
     cur = cfg.currency
     for name, old, new in report:
         if new <= 0:
@@ -623,7 +607,10 @@ def cmd_budget_set(args, cfg: Config) -> int:
         else:
             _say(f"  {name}: {money_auto(old, cur)} → {money_auto(new, cur)}")
     _say(f"Saved to {path}.\n")
-    _budget_summary(load_config(str(path)), args)
+    fresh = load_config(str(cfg.path) if cfg.path else None)
+    from finagent.sheet import apply_sheet
+    apply_sheet(fresh)
+    _budget_summary(fresh, args)
     return 0
 
 
@@ -820,6 +807,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("items", nargs="+", metavar='"Category=Amount"', help="use 0 to remove a budget line")
     sp.add_argument("--new", action="store_true", help="allow a category name that isn't in your data yet")
     sub.add_parser("budgets", help="your budgets vs. what you actually spend")
+    sp = sub.add_parser("sheet", help="create/refresh budget.xlsx — edit budgets and income in Excel")
+    sp.add_argument("--no-open", action="store_true", help="don't open it afterwards")
+    sp.add_argument("--trim", type=float, default=10.0, help="percent below average for suggested lifestyle budgets")
 
     sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
     sp.add_argument("--months", type=int, help="months to average (default 3)")
@@ -854,6 +844,50 @@ def cmd_keys(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_sheet(args, cfg: Config) -> int:
+    """Create or refresh budget.xlsx — the editable budget + income workbook."""
+    from finagent import sheet
+    from finagent.budgeting import suggest
+    try:
+        sheet.require_openpyxl()
+    except sheet.SheetUnavailable as err:
+        raise CLIError(str(err)) from None
+    path = sheet.sheet_path(cfg)
+    existing = sheet.read_sheet(path) if path.exists() else None
+    with _store(cfg, args) as store:
+        L = _ledger(cfg, store, _today(args))
+        A6 = _analysis(L, 6)
+        A3 = Analysis(L, A6.months[-3:])
+        suggestions = suggest(L, A3, args.trim)
+        config_budgets = {} if existing else dict(cfg.get("budgets") or {})
+        sheet.write_sheet(path, L, suggestions, A6.months, A3.months, cfg.currency, existing, config_budgets,
+                          float(cfg["analysis"].get("savings_rate_target", 0.15)))
+    if existing:
+        _say(f"Refreshed {path}: recent averages updated; your budgets, notes and Yes/No choices were kept "
+             f"(previous copy saved as {path.stem}.backup.xlsx).")
+    else:
+        _say(f"Created {path}.")
+        _say("  Income tab: mark each source Yes (regular, like your paychecks) or No (one-time money).")
+        _say("  Budget tab: type your monthly budgets in the yellow column; totals update as you go.")
+        _say("  Save it (as .xlsx). Every finagent report now reads it automatically.")
+    if not args.no_open:
+        _open_file(path)
+    return 0
+
+
+def _open_file(path: Path) -> None:
+    import subprocess
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", str(path)], check=False)
+        elif os.name == "nt":
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+    except OSError:
+        _say(f"Open it from: {path}")
+
+
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "sync": cmd_sync, "import": cmd_import, "itemize": cmd_itemize,
     "subscriptions": cmd_subscriptions, "review": cmd_review, "weekly": cmd_weekly, "monthly": cmd_monthly,
@@ -862,6 +896,7 @@ COMMANDS = {
     "keys": cmd_keys,
     "budget-set": cmd_budget_set,
     "budgets": cmd_budgets,
+    "sheet": cmd_sheet,
 }
 
 
@@ -871,6 +906,11 @@ def main(argv: list[str] | None = None) -> int:
         from finagent.keystore import load_env_file
         load_env_file()
         cfg = load_config(args.config)
+        if args.cmd not in ("demo", "init", "keys", "plaid"):
+            from finagent.sheet import apply_sheet
+            warning = apply_sheet(cfg)
+            if warning:
+                _err(warning)
         return COMMANDS[args.cmd](args, cfg)
     except (CLIError, FileNotFoundError, ValueError) as err:
         _err(str(err))
