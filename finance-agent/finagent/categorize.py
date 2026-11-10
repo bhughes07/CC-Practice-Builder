@@ -148,7 +148,8 @@ def normalize_merchant(payee: str) -> str:
 _CLASS_RULES: list[tuple[str, re.Pattern]] = [
     (CLASS_TRANSFER, re.compile(r"transfer|credit card payment|cc payment|internal master", re.I)),
     (CLASS_GIVING, re.compile(r"tith|giving|charit|donat|church|offering|mission|generosity|ministr", re.I)),
-    (CLASS_SAVINGS, re.compile(r"saving|invest|retire|401k|\bira\b|emergency fund|brokerage|529|college fund", re.I)),
+    (CLASS_SAVINGS, re.compile(r"saving|invest|retire|401k|\bira\b|emergency fund|brokerage|529|college fund|"
+                               r"irregular|sinking fund", re.I)),
     (CLASS_INCOME, re.compile(r"income|paycheck|salary|payroll|wages|ready to assign|to be budgeted|"
                               r"inflow|dividend|interest earned|bonus", re.I)),
     (CLASS_FEES, re.compile(r"\bfees?\b|bank charge|service charge|finance charge|interest charge", re.I)),

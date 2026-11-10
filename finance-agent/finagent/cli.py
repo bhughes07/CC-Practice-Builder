@@ -449,10 +449,11 @@ def cmd_budget_suggest(args, cfg: Config) -> int:
             rows.append(("Planning", "Irregular Expenses", math.ceil(one_offs / 25) * 25, one_offs, "sinking fund"))
         rows.sort(key=lambda r: (r[0], -r[3]))
 
-        lines = [f"# Suggested from your spending, {month_label(A.months[0])} – {month_label(A.months[-1])}.",
+        lines = ["[budgets]",
+                 f"# Suggested by `finagent budget-suggest` on {_today(args).isoformat()} from "
+                 f"{month_label(A.months[0])} – {month_label(A.months[-1])} spending.",
                  f"# Fixed bills = what they cost · lifestyle categories = {args.trim:.0f}% under your average ·",
-                 "# one-off purchases moved to an 'Irregular Expenses' fund. Edit, then paste into config.toml.",
-                 "[budgets]"]
+                 "# one-off purchases moved to an 'Irregular Expenses' fund. Edit any number you like."]
         group = None
         for g, cat, target, avg, note in rows:
             if g != group:
@@ -470,7 +471,38 @@ def cmd_budget_suggest(args, cfg: Config) -> int:
         elif A.avg_income:
             lines.append(f"# Leaves {money_auto(left, cur)}/mo to save ({left / A.avg_income * 100:.0f}% of income).")
         _say("\n".join(lines))
+        if args.save:
+            path = save_budgets(cfg, lines)
+            _say(f"\nSaved these budgets to {path} (previous version kept as {path.name}.bak). "
+                 f"Edit that file any time, or run this again to start over.")
+        else:
+            _say("\nLooks right? Run `finagent budget-suggest --save` to write it into config.toml for you.")
     return 0
+
+
+def save_budgets(cfg: Config, block: list[str]) -> Path:
+    """Replace the [budgets] table in config.toml with `block` (creating config.toml if needed)."""
+    import re
+    import tomllib
+    path = cfg.path or (home_dir() / "config.toml")
+    if not path.exists():
+        shutil.copy(EXAMPLE_CONFIG, path)
+    text = path.read_text(encoding="utf-8")
+    new_block = "\n".join(block) + "\n\n"
+    m = re.search(r"^\[budgets\][ \t]*(#.*)?$", text, re.M)
+    if m:
+        nxt = re.search(r"^\[(?!budgets\])", text[m.end():], re.M)
+        end = m.end() + nxt.start() if nxt else len(text)
+        updated = text[:m.start()] + new_block + text[end:]
+    else:
+        updated = text.rstrip("\n") + "\n\n" + new_block
+    try:
+        tomllib.loads(updated)
+    except tomllib.TOMLDecodeError as err:
+        raise CLIError(f"Couldn't update {path} safely ({err}); it was left unchanged.") from None
+    path.with_name(path.name + ".bak").write_text(text, encoding="utf-8")
+    path.write_text(updated, encoding="utf-8")
+    return path
 
 
 # --------------------------------------------------------------------------- plaid
@@ -665,6 +697,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("budget-suggest", help="print a [budgets] block based on what you actually spend")
     sp.add_argument("--months", type=int, help="months to average (default 3)")
     sp.add_argument("--trim", type=float, default=10.0, help="percent below average for discretionary (default 10)")
+    sp.add_argument("--save", action="store_true", help="write the budgets into config.toml for you")
 
     sub.add_parser("ynab-budgets", help="list your YNAB budgets and their ids")
     return p

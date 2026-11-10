@@ -159,3 +159,40 @@ def test_email_report_builds_multipart_message(demo, cfg, tmp_path, monkeypatch)
     assert msg["Subject"].startswith("[Budget] 6-month budget review")
     types = [part.get_content_type() for part in msg.walk()]
     assert "text/html" in types and "text/plain" in types and "text/csv" in types
+
+
+def test_budget_suggest_save_writes_config_once(tmp_path, capsys):
+    import tomllib
+
+    from finagent.config import EXAMPLE_CONFIG
+    from finagent.store import Store
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(EXAMPLE_CONFIG.read_text())  # what `finagent init` creates — already has a [budgets] table
+    txns, _ = generate(TODAY)
+    with Store(tmp_path / "data" / "finance.db") as store:
+        store.upsert_transactions(txns)
+    base = ["--config", str(cfg), "--today", TODAY.isoformat(), "budget-suggest"]
+    assert main(base) == 0
+    assert cfg.read_text() == EXAMPLE_CONFIG.read_text()  # preview only
+    assert main(base + ["--save"]) == 0
+    assert main(base + ["--save", "--trim", "20"]) == 0  # running again replaces, never duplicates
+    text = cfg.read_text()
+    assert text.count("[budgets]") == 1 and (tmp_path / "config.toml.bak").exists()
+    data = tomllib.loads(text)
+    assert data["budgets"]["Mortgage"] == 2150 and "Irregular Expenses" in data["budgets"]
+    assert data["categories"]["force_merchant_rules"] is False  # the rest of the file is intact
+    assert "-20%" in capsys.readouterr().out
+
+
+def test_irregular_fund_is_set_aside_not_unused(cfg):
+    from finagent.categorize import category_class
+    assert category_class("Irregular Expenses", "Planning") == "savings"
+    txns, budgets = generate(TODAY)
+    from finagent.models import Budget
+    budgets += [Budget(month=mo, category="Irregular Expenses", amount=425) for mo in {b.month for b in budgets}]
+    ledger = Ledger(txns, budgets, cfg, TODAY)
+    A = Analysis(ledger, ledger.available_months(6))
+    unused = next((i for i in A.insights if i.key == "reallocate"), None)
+    assert unused is None or "Irregular" not in unused.detail  # set aside, not "unused"
+    fund = next(i for i in A.insights if i.key == "sinking-fund")
+    assert "Irregular Expenses fund" in fund.title and "Create" not in fund.action

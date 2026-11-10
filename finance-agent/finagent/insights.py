@@ -429,11 +429,29 @@ class Analysis:
         per_month = total / self.n
         fund = math.ceil(per_month / 25) * 25
         top = self.unusual[:4]
+        detail = "Irregular costs: " + "; ".join(
+            f"{t.merchant} {self.m(t.outflow)} ({fmt_date(t.date)})" for t, _ in top) + "."
+        # Already budgeting a sinking fund? Then confirm it's big enough instead of suggesting a new one.
+        latest = self.ledger.budget_map.get(self.months[-1], {})
+        existing = [(c, a) for c, a in latest.items() if re.search(r"irregular|sinking", c, re.I)]
+        if existing:
+            name, amount = existing[0]
+            enough = amount >= per_month * 0.9
+            self.insights.append(Insight(
+                key="sinking-fund",
+                title=(f"Your {name} fund covers one-offs ({self.m(per_month)}/mo lately)" if enough else
+                       f"One-offs ({self.m(per_month)}/mo) outpace your {name} fund ({self.m(amount)}/mo)"),
+                detail=detail,
+                action=("Keep funding it every month, and pay surprises like these from it instead of the "
+                        "everyday categories." if enough else
+                        f"Raise {name} to about {self.m(fund)}/mo so surprises like these don't land on the "
+                        f"everyday budget."),
+                monthly_impact=0.0, severity="low" if enough else "medium", area="Planning", kind="protect"))
+            return
         self.insights.append(Insight(
             key="sinking-fund",
             title=f"One-off expenses averaged {self.m(per_month)}/mo — plan for them",
-            detail="Irregular costs: " + "; ".join(
-                f"{t.merchant} {self.m(t.outflow)} ({fmt_date(t.date)})" for t, _ in top) + ".",
+            detail=detail,
             action=f"Create an 'Irregular expenses' category funded at {self.m(fund)}/mo (car repairs, medical, "
                    f"gifts, annual renewals). The surprises stop being emergencies.",
             monthly_impact=0.0, severity="medium", area="Planning", kind="protect"))
