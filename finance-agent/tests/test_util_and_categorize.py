@@ -138,3 +138,44 @@ def test_card_payments_count_unless_the_card_is_connected():
     assert always["CHASE CREDIT CRD EPAY"].kind == "expense" and always["DISCOVER E-PAYMENT"].kind == "expense"
     never = rows("transfer")
     assert never["DISCOVER E-PAYMENT"].kind == "transfer"
+
+
+def test_matches_words_dont_swallow_card_payments_or_payment_apps():
+    from finagent.categorize import enrich, why_here
+    from finagent.models import Transaction
+    from datetime import date
+
+    def t(n, payee, amount, category, account="Checking"):
+        return Transaction(id=f"w{n}", date=date(2026, 10, n), amount=amount, payee=payee, category=category,
+                           account=account)
+
+    rules = [{"line": "Apple", "group": "Subscriptions", "terms": ["Apple"]},
+             {"line": "Disney / Hulu", "group": "Subscriptions", "terms": ["Disney+", "Hulu $18.99"]},
+             {"line": "Babysitting", "group": "Lifestyle", "terms": ["Sarah"]},
+             {"line": "Credit Cards", "group": "Insurance & Tax", "terms": ["Apple Card"]}]
+    rows = {x.id: x for x in enrich([
+        t(1, "APPLE.COM/BILL", -10.81, "Subscriptions"),
+        t(2, "APPLE CASH SENT MONEY", -60.0, "Payments to People"),            # money to a friend, not Apple
+        t(3, "APPLE CARD GSBANK PAYMENT", -250.0, "Credit Card Payment"),       # a card payment from checking
+        t(4, "Zelle payment to Sarah M", -80.0, "Payments to People"),          # a name still reaches through
+        t(5, "HULU 877-824-4858", -18.99, "Subscriptions"),
+        t(6, "WALT DISNEY WORLD TICKETS", -540.0, "Entertainment"),             # "Disney+" isn't "Disney"
+    ], {"categories": {"line_rules": rules, "card_payments": "spending"}})}
+    assert (rows["w1"].category, why_here(rows["w1"])) == ("Apple", 'Matches "Apple"')
+    assert rows["w2"].category == "Payments to People" and why_here(rows["w2"]) == "Bank category"
+    assert rows["w3"].category == "Credit Cards" and why_here(rows["w3"]) == 'Matches "Apple Card"'
+    assert rows["w4"].category == "Babysitting"
+    assert (rows["w5"].category, rows["w5"].matched_by) == ("Disney / Hulu", "Hulu $18.99")
+    assert rows["w6"].category == "Entertainment"
+
+
+def test_card_payment_isnt_moved_onto_a_merchant_line():
+    from finagent.categorize import enrich
+    from finagent.models import Transaction
+    from datetime import date
+    pay = Transaction(id="c1", date=date(2026, 10, 3), amount=-300.0, payee="APPLE CARD GSBANK PAYMENT",
+                      category="Credit Card Payment", account="Checking")
+    [row] = enrich([pay], {"categories": {"card_payments": "spending",
+                                          "line_rules": [{"line": "Apple", "group": "Subscriptions",
+                                                          "terms": ["Apple"]}]}})
+    assert row.category == "Credit Card Payments" and row.kind == "expense"

@@ -43,6 +43,8 @@ class Transaction:
     kind: str = ""
     cls: str = ""
     flags: set[str] = field(default_factory=set)
+    orig_category: str = ""  # the bank's / app's category, before your budget lines re-filed it
+    matched_by: str = ""  # the Matches word that put it on your budget line, e.g. "Apple" or "Hulu $19.99"
 
     @property
     def outflow(self) -> float:

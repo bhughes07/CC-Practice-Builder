@@ -80,6 +80,9 @@ DEFAULTS: dict[str, Any] = {
         # Credit-card payments: "auto" counts a payment as spending unless the card is also connected
         # (then its purchases are already counted); "spending" always counts them; "transfer" never does.
         "card_payments": "auto",
+        # Accounts to leave out of the household budget entirely (matched against the account name),
+        # e.g. ["Amazon Card"] for a card used only for influencer / business purchases.
+        "ignore_accounts": [],
         # Categories to ignore entirely (e.g. reimbursable work expenses).
         "ignore": [],
     },

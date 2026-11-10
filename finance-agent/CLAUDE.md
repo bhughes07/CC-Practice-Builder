@@ -13,9 +13,11 @@ Personal finance agent. Python 3.11+, standard library only (optional `anthropic
   detection, detectors, ranked `Insight`s with $ impact. `recurring.py`, `detectors.py` — the building blocks.
 - `finagent/reports/` — `builders.py` (weekly / monthly / review → typed sections), `render_html.py`
   (email-safe, table-based), `render_md.py`, `model.py`.
-- `finagent/budgeting.py` — suggested budgets from real spending. `finagent/sheet.py` — budget.xlsx (Budget +
-  Income tabs) written with openpyxl and read back on every run; when it exists it's the source of budgets
-  and of which income sources count as regular.
+- `finagent/budgeting.py` — suggested budgets from real spending. `finagent/sheet.py` — budget.xlsx (Budget,
+  Income and Transactions tabs) written with openpyxl and read back on every run; when it exists it's the source
+  of budgets, of which income sources count as regular, and of per-transaction "Move to line" / "Exclude" choices
+  (keyed by transaction ID, applied in `categorize.enrich`). `Transaction.matched_by` / `why_here()` explain
+  which Matches word filed a transaction; card payments only ever match debt lines.
 - Income: `Ledger.incomes` is *regular* income only (paychecks / scheduled deposits, or the spreadsheet's
   "Yes" sources); refunds, settlements and other one-time money live in `Ledger.one_time_incomes`.
 - `finagent/cli.py` — every command. `finagent/ai.py` — optional Claude-written coach's note.

@@ -310,30 +310,52 @@ def compile_line_rules(rules: list[dict] | None) -> list[tuple[re.Pattern, str, 
             if m and m.group(1).strip():
                 term, amount = m.group(1).strip(), float(m.group(2).replace(",", ""))
             if term:
-                out.append((re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])", re.I), term.lower(), amount,
+                out.append((re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])", re.I), term, amount,
                             r["line"], r.get("group", "")))
     return out
 
 
-def match_line(t: Transaction, compiled) -> tuple[str, str] | None:
-    """Your budget line for a transaction. Most specific wins: merchant + exact amount, then a term found in the
-    merchant / description, then a term naming the bank's category; ties go to the longest term."""
+# Payment apps: a Matches word only reaches through the app's own name if it names the app — so "Apple" on a
+# subscriptions line doesn't catch money sent with Apple Cash, but "Sarah" can still catch "Zelle to Sarah".
+P2P_APP = re.compile(r"apple ?cash|cash ?app|venmo|zelle|paypal", re.I)
+
+
+def match_line(t: Transaction, compiled) -> tuple[str, str, str] | None:
+    """(line, group, the Matches term that won) for a transaction. Most specific wins: merchant + exact amount,
+    then a term found in the merchant / description, then a term naming the bank's category; ties go to the
+    longest term."""
     text = f"{t.merchant} {t.payee} {t.memo}"
+    without_app = P2P_APP.sub(" ", text) if P2P_APP.search(text) else text
+    cat = t.category.strip().lower()
     best = None
     for rx, term, amount, line, group in compiled:
+        hay = text if without_app is text or P2P_APP.search(term) else without_app
         if amount is not None:
-            if not (rx.search(text) and abs(abs(t.amount) - amount) < 0.005):
+            if not (rx.search(hay) and abs(abs(t.amount) - amount) < 0.005):
                 continue
             score = (3, len(term))
-        elif rx.search(text):
+        elif rx.search(hay):
             score = (2, len(term))
-        elif term == t.category.strip().lower():
+        elif term.lower() == cat:
             score = (1, len(term))
         else:
             continue
         if best is None or score > best[0]:
-            best = (score, line, group)
-    return (best[1], best[2]) if best else None
+            best = (score, line, group, f"{term} ${amount:,.2f}" if amount is not None else term)
+    return (best[1], best[2], best[3]) if best else None
+
+
+def why_here(t: Transaction) -> str:
+    """Plain-English reason a transaction sits on its budget line (shown on the Transactions tab)."""
+    if "excluded by you" in t.flags:
+        return "You excluded it"
+    if "moved by you" in t.flags:
+        return "You moved it"
+    if t.matched_by:
+        return f'Matches "{t.matched_by}"'
+    if "card payment" in t.flags:
+        return "Card payment from checking"
+    return "Bank category"
 
 
 CARD_PAYMENT = re.compile(
@@ -343,6 +365,7 @@ CARD_PAYMENT = re.compile(
     r"\b(payment|pmt|autopay)\b", re.I)
 NOT_CARD = re.compile(r"mortgage|loan|auto pay(ment)? to|car pay|student|insurance", re.I)
 CARD_PAYMENTS_LINE = "Credit Card Payments"
+DEBT_LINE = re.compile(r"credit|\bcards?\b|debt|loan", re.I)  # budget lines a card payment may be filed under
 
 
 def _count_card_payments(txns: list[Transaction], mode: str) -> None:
@@ -383,6 +406,7 @@ def _count_card_payments(txns: list[Transaction], mode: str) -> None:
 
 
 PAYCHECK_HINT = re.compile(r"payroll|paycheck|salary|wages|direct dep", re.I)
+EXCLUDE_WORDS = {"exclude", "excluded", "not spending", "ignore", "skip"}
 
 
 def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Transaction]:
@@ -393,28 +417,52 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
     overrides: dict[str, str] = cats.get("class_overrides", {}) or {}
     ignore = {c.lower() for c in (cats.get("ignore", []) or [])}
     lines = compile_line_rules(cats.get("line_rules"))
+    # A card payment from checking can only be re-filed onto a debt line ("Credit Card Payments", "Apple Card"…),
+    # never onto a merchant line that happens to share a word with the card ("Apple" → Apple Card payment).
+    debt_lines = [r for r in lines if category_class(r[3], r[4], overrides) == CLASS_DEBT or DEBT_LINE.search(r[3])]
+    # Your per-transaction choices from the spreadsheet's Transactions tab: id → line, or "Exclude".
+    moved: dict[str, str] = {str(k): str(v).strip() for k, v in (cats.get("txn_overrides") or {}).items() if v}
+    line_groups: dict[str, str] = {**{r["line"]: r.get("group", "") for r in cats.get("line_rules") or []},
+                                   **(cats.get("line_groups") or {})}
+    ignore_accounts = [a.lower() for a in (cats.get("ignore_accounts") or []) if a]
     txns = list(txns)
     _count_card_payments(txns, str(cats.get("card_payments", "auto")).lower())
     out: list[Transaction] = []
     for t in txns:
         if t.category.lower() in ignore:
             continue
-        t.merchant = normalize_merchant(t.payee)
+        if ignore_accounts and any(a in t.account.lower() for a in ignore_accounts):
+            continue  # e.g. a card used only for business / influencer purchases
+        t.merchant, t.matched_by = normalize_merchant(t.payee), ""
         if t.merchant in rules and (force or t.category.strip().lower() in UNCATEGORIZED):
             t.category = rules[t.merchant]
         elif t.category.strip().lower() in UNCATEGORIZED and not t.is_transfer:
             guess = guess_category(t.merchant, t.payee)
             if guess != "Uncategorized" or not t.category:
                 t.category = guess
+        t.orig_category = t.category
         t.cls = category_class(t.category, t.category_group, overrides)
         if "card payment" in t.flags:
             t.cls = CLASS_DEBT  # money leaving checking for a card that isn't connected: real spending
         # Your own budget lines (from the spreadsheet's Matches column) re-file spending under your names.
         if lines and not t.is_transfer and t.cls not in (CLASS_INCOME, CLASS_TRANSFER):
-            hit = match_line(t, lines)
+            hit = match_line(t, debt_lines if "card payment" in t.flags else lines)
             if hit:
-                t.category, t.category_group = hit[0], hit[1] or t.category_group
+                t.category, t.category_group, t.matched_by = hit[0], hit[1] or t.category_group, hit[2]
                 t.cls = category_class(t.category, t.category_group, overrides)
+        if t.id in moved:  # you said where this one goes
+            target = moved[t.id]
+            if target.lower() in EXCLUDE_WORDS:
+                t.is_transfer = True
+                t.flags.add("excluded by you")
+            else:
+                t.category = target
+                t.category_group = line_groups.get(target, t.category_group)
+                t.is_transfer = False
+                t.flags.add("moved by you")
+                t.cls = category_class(t.category, t.category_group, overrides)
+                if t.cls in (CLASS_TRANSFER, CLASS_INCOME):  # you called it spending, so it is
+                    t.cls = CLASS_DEBT if CARD_PAYMENT.search(target) else CLASS_OTHER
         t.kind = classify_kind(t, t.cls)
         if t.kind == KIND_INCOME:
             t.cls = CLASS_INCOME

@@ -25,11 +25,16 @@ from datetime import date
 from pathlib import Path
 
 from finagent.budgeting import Suggestion
+from finagent.categorize import why_here
 from finagent.ledger import Ledger
-from finagent.models import CLASS_DEBT, CLASS_ESSENTIAL, CLASS_FEES, CLASS_GIVING, CLASS_SAVINGS
+from finagent.models import CLASS_DEBT, CLASS_ESSENTIAL, CLASS_FEES, CLASS_GIVING, CLASS_SAVINGS, KIND_EXPENSE
 from finagent.util import month_end, month_label, month_start, parse_amount
 
-BUDGET, INCOME, HELP = "Budget", "Income", "How to use"
+BUDGET, INCOME, TXNS, LISTS, HELP = "Budget", "Income", "Transactions", "Lists", "How to use"
+TXN_HEADERS = ["Date", "Budget line", "Merchant", "Bank description", "Account", "Amount", "Bank category",
+               "Why it's here", "Move to line", "Note", "ID"]
+TXN_WIDTHS = (13, 24, 24, 44, 20, 12, 20, 22, 22, 30, 4)
+TXN_HEADER_ROW = 4
 BUDGET_HEADERS = ["Group", "Budget line", "Monthly budget", "Matches", "Avg last 3 mo", "Avg last 6 mo",
                   "Last month", "Budget vs. recent", "Type", "Notes"]
 INCOME_HEADERS = ["Source", "Category", "Deposits", "Avg per month", "Total", "Last deposit", "Regular income?",
@@ -77,6 +82,8 @@ class SheetData:
     income_notes: dict[str, str] = field(default_factory=dict)
     target_rate: float | None = None
     giving_goal: float | None = None
+    overrides: dict[str, str] = field(default_factory=dict)  # transaction id → line, or "Exclude"
+    txn_notes: dict[str, str] = field(default_factory=dict)
 
 
 def _yes(value) -> bool | None:
@@ -156,6 +163,20 @@ def read_sheet(path: Path) -> SheetData:
                 v = _number(ws.cell(r, 3).value)
                 if v is not None:
                     data.giving_goal = v / 100 if v > 1 else v
+    if TXNS in wb.sheetnames:
+        ws = wb[TXNS]
+        hr = _find_header(ws, ("Move to line", "ID"), TXN_HEADER_ROW)
+        col = _header_index(ws, hr)
+        for r in range(hr + 1, ws.max_row + 1):
+            tid = ws.cell(r, col["ID"]).value
+            if not tid:
+                continue
+            move = str(ws.cell(r, col["Move to line"]).value or "").strip()
+            note = str(ws.cell(r, col["Note"]).value or "").strip() if "Note" in col else ""
+            if move:
+                data.overrides[str(tid)] = move
+            if note:
+                data.txn_notes[str(tid)] = note
     if INCOME in wb.sheetnames:
         ws = wb[INCOME]
         hr = _find_header(ws, ("Source", "Regular income?"), INCOME_HEADER_ROW)
@@ -177,7 +198,9 @@ def merge_import(existing: SheetData | None, incoming: SheetData) -> SheetData:
     from your real deposits, keeping the Yes/No choices already in `existing`."""
     merged = SheetData(lines=list(incoming.lines), budgets=dict(incoming.budgets), blank=set(incoming.blank),
                        groups=dict(incoming.groups), matches=dict(incoming.matches), notes=dict(incoming.notes),
-                       target_rate=incoming.target_rate, giving_goal=incoming.giving_goal)
+                       target_rate=incoming.target_rate, giving_goal=incoming.giving_goal,
+                       overrides={**(existing.overrides if existing else {}), **incoming.overrides},
+                       txn_notes={**(existing.txn_notes if existing else {}), **incoming.txn_notes})
     merged.income, merged.income_notes = dict(incoming.income), dict(incoming.income_notes)
     if existing:  # your current choices, unless the imported file says otherwise
         merged.income = {**existing.income, **incoming.income}
@@ -194,6 +217,8 @@ def configure(cfg, data: SheetData) -> None:
     cats = cfg.setdefault("categories", {})
     cats["line_rules"] = [{"line": line, "group": data.groups.get(line, ""), "terms": data.matches[line]}
                           for line in data.lines if data.matches.get(line)]
+    cats["line_groups"] = dict(data.groups)
+    cats["txn_overrides"] = dict(data.overrides)
     income = cfg.setdefault("income", {})
     income["sources"] = {**(income.get("sources") or {}), **data.income}
     if data.target_rate:
@@ -228,6 +253,7 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
     openpyxl = require_openpyxl()
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.utils import get_column_letter
 
     existing = existing or SheetData()
     config_budgets = config_budgets or {}
@@ -410,6 +436,66 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         wi.column_dimensions[col].width = width
     wi.freeze_panes = wi.cell(INCOME_HEADER_ROW + 1, 1)
 
+    # ---------------------------------------------------------------- Transactions tab
+    wt = wb.create_sheet(TXNS)
+    wt["A1"] = "Transactions"
+    wt["A1"].font = Font(bold=True, size=16)
+    wt["A2"] = ("Every expense since " + (month_label(months6[0]) if months6 else "the start") + ", newest first. "
+                "Use the filter arrows to show one budget line, merchant or account. To file a transaction "
+                "somewhere else, pick a line in 'Move to line' (or 'Exclude' for things that aren't household "
+                "spending, like returned influencer purchases) and save — finagent remembers it.")
+    wt["A2"].alignment = wrap
+    wt.merge_cells("A2:I2")
+    wt.row_dimensions[2].height = 46
+    for j, h in enumerate(TXN_HEADERS, 1):
+        c = wt.cell(TXN_HEADER_ROW, j, h)
+        c.font, c.fill = white_bold, accent_fill
+    tcol = {h: j for j, h in enumerate(TXN_HEADERS, 1)}
+    since = month_start(months6[0]) if months6 else date.min
+    # Excluded ones stay listed (so you can see and undo them: clear 'Move to line').
+    txns = sorted((t for t in L.all if t.date >= since and (t.kind == KIND_EXPENSE or "excluded by you" in t.flags)),
+                  key=lambda t: (t.date, t.outflow), reverse=True)
+    grey = Font(color="808080", italic=True)
+    for i, t in enumerate(txns):
+        r = TXN_HEADER_ROW + 1 + i
+        desc = t.memo or t.payee
+        excluded = "excluded by you" in t.flags
+        row = {"Date": t.date, "Budget line": "Excluded" if excluded else t.category,
+               "Merchant": t.merchant or t.payee, "Bank description": desc, "Account": t.account,
+               "Amount": round(t.outflow, 2),
+               "Bank category": t.orig_category if t.orig_category != t.category else "",
+               "Why it's here": why_here(t), "Move to line": existing.overrides.get(t.id, ""),
+               "Note": existing.txn_notes.get(t.id, ""), "ID": t.id}
+        for j, h in enumerate(TXN_HEADERS, 1):
+            c = wt.cell(r, j, row[h])
+            if h == "Date":
+                c.number_format = "mmm d, yyyy"
+            elif h == "Amount":
+                c.number_format = money_signed.replace('#,##0', '#,##0.00')
+            if excluded and j < tcol["Move to line"]:
+                c.font = grey
+        wt.cell(r, tcol["Move to line"]).fill = yellow_fill
+        wt.cell(r, tcol["Note"]).fill = yellow_fill
+    last_txn = TXN_HEADER_ROW + max(len(txns), 1)
+    wt.auto_filter.ref = f"A{TXN_HEADER_ROW}:{get_column_letter(len(TXN_HEADERS))}{last_txn}"
+    for j, width in enumerate(TXN_WIDTHS, 1):
+        wt.column_dimensions[get_column_letter(j)].width = width
+    wt.column_dimensions[get_column_letter(tcol["ID"])].hidden = True
+    wt.freeze_panes = wt.cell(TXN_HEADER_ROW + 1, 1)
+    # A dropdown of your lines (+ Exclude) for "Move to line"; other text is allowed after a warning.
+    wl = wb.create_sheet(LISTS)
+    choices = list(plan) + [c for c in leftovers if c not in plan] + ["Exclude"]
+    for i, name in enumerate(choices, 1):
+        wl.cell(i, 1, name)
+    wl.sheet_state = "hidden"
+    move_dv = DataValidation(type="list", formula1=f"={LISTS}!$A$1:$A${len(choices)}", allow_blank=True,
+                             showErrorMessage=True, errorStyle="warning",
+                             error="That isn't one of your budget lines. Keep it anyway?")
+    wt.add_data_validation(move_dv)
+    if txns:
+        move_col = get_column_letter(tcol["Move to line"])
+        move_dv.add(f"{move_col}{TXN_HEADER_ROW + 1}:{move_col}{last_txn}")
+
     # ---------------------------------------------------------------- How to use
     wh = wb.create_sheet(HELP)
     lines = [
@@ -423,7 +509,9 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         ("   line, or add its name to the Matches of an existing line.", False),
         ("5. Add a line: type it in a new row under your other lines (Group, Budget line, budget, Matches).", False),
         ("6. Save as Excel (.xlsx). In Numbers, use File → Export To → Excel and replace this file.", False),
-        ("7. Run any finagent report — it reads this file. Run `finagent sheet` (with this file closed) to", False),
+        ("7. Transactions tab: every expense with the line it landed on. Filter to review a line; use", False),
+        ("   'Move to line' to file one somewhere else, or 'Exclude' for things that aren't household spending.", False),
+        ("8. Run any finagent report — it reads this file. Run `finagent sheet` (with this file closed) to", False),
         ("   refresh the averages; your lines, budgets, matches, notes and Yes/No choices are kept.", False),
         ("Giving and saving lines are yours to set — finagent never suggests cutting them.", False),
     ]

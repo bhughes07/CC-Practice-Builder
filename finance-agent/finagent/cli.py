@@ -807,6 +807,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("items", nargs="+", metavar='"Category=Amount"', help="use 0 to remove a budget line")
     sp.add_argument("--new", action="store_true", help="allow a category name that isn't in your data yet")
     sub.add_parser("budgets", help="your budgets vs. what you actually spend")
+    sp = sub.add_parser("transactions", help='review expenses, e.g. transactions "Apple" or transactions "Haircuts"')
+    sp.add_argument("query", nargs="?", help="budget line, merchant, description, category, or account text")
+    sp.add_argument("--months", type=int, default=6, help="how far back (default 6 months)")
+    sp.add_argument("--limit", type=int, default=60, help="max rows to print (default 60)")
     sp = sub.add_parser("budget-match", help='file transactions under a line, e.g. budget-match "Gas" "Convenience Stores"')
     sp.add_argument("line", help="the budget line, as written on the Budget tab")
     sp.add_argument("terms", nargs="+", help="merchant names or bank categories (\"Apple $2.99\" matches an amount)")
@@ -933,6 +937,63 @@ def cmd_budget_match(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_transactions(args, cfg: Config) -> int:
+    """List expenses for a budget line, merchant, or any text — and show what's behind the numbers."""
+    from collections import Counter, defaultdict
+
+    from finagent.categorize import why_here
+    with _store(cfg, args) as store:
+        L = _ledger(cfg, store, _today(args))
+        months = L.available_months(args.months)
+        start = month_start(months[0]) if months else L.today - timedelta(days=31 * args.months)
+        q = (args.query or "").lower().strip()
+
+        def hit(t):
+            if not q:
+                return True
+            fields = (t.category, t.orig_category, t.merchant, t.payee, t.memo, t.account)
+            return any(q in (f or "").lower() for f in fields)
+
+        rows = sorted((t for t in L.expenses_between(start, L.today) if hit(t)), key=lambda t: t.date, reverse=True)
+        if not rows:
+            _say(f'No expenses matching "{args.query}" since {fmt_date(start, True)}.')
+            return 0
+        cur = L.currency
+        _print_table(["Date", "Budget line", "Merchant", "Bank description", "Amount", "Why it's here"],
+                     [[t.date.isoformat(), t.category[:20], (t.merchant or t.payee)[:22], (t.memo or t.payee)[:34],
+                       money(t.outflow, cur), why_here(t)[:28]] for t in rows[: args.limit]], "llllrl")
+        if len(rows) > args.limit:
+            _say(f"… {len(rows) - args.limit} more (use --limit, or the Transactions tab in budget.xlsx).")
+        total = sum(t.outflow for t in rows)
+        _say(f"\n{len(rows)} transactions · {money(total, cur)} since {fmt_date(start, True)}")
+
+        # Monthly averages over *full* months — the same math as the Budget tab's "Avg last 3 / 6 mo".
+        def avg(ms: list[str], items) -> float:
+            if not ms:
+                return 0.0
+            lo, hi = month_start(ms[0]), month_end(ms[-1])
+            return sum(t.outflow for t in items if lo <= t.date <= hi) / len(ms)
+
+        by_line: dict[str, list] = defaultdict(list)
+        for t in rows:
+            by_line[t.category].append(t)
+        _say("By budget line (avg per month, last 3 / last 6 full months):")
+        for line, items in sorted(by_line.items(), key=lambda kv: -sum(t.outflow for t in kv[1])):
+            _say(f"  {line[:28]:<28} {money(avg(months[-3:], items), cur):>10} / {money(avg(months, items), cur):>10}"
+                 f"   ({len(items)} transactions)")
+        by, counts = Counter(), Counter()
+        for t in rows:
+            key = f"{t.merchant or t.payee} · {t.category} · {why_here(t)}"
+            by[key] += t.outflow
+            counts[key] += 1
+        _say("Biggest merchants (merchant · budget line · why it's there):")
+        for key, v in by.most_common(10):
+            _say(f"  {money(v, cur):>11}  {counts[key]:>3}×  {key}")
+        _say('\nTo file something elsewhere: budget.xlsx → Transactions tab → "Move to line" (or "Exclude"). '
+             "To stop a match word catching the wrong things, edit that line's Matches on the Budget tab.")
+    return 0
+
+
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "sync": cmd_sync, "import": cmd_import, "itemize": cmd_itemize,
     "subscriptions": cmd_subscriptions, "review": cmd_review, "weekly": cmd_weekly, "monthly": cmd_monthly,
@@ -943,6 +1004,7 @@ COMMANDS = {
     "budgets": cmd_budgets,
     "sheet": cmd_sheet,
     "budget-match": cmd_budget_match,
+    "transactions": cmd_transactions,
 }
 
 

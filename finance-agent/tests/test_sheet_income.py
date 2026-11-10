@@ -279,3 +279,76 @@ def test_zero_budgets_grouping_notes_and_matches(tmp_path, capsys):
     assert main(base + ["budget-match", "Gas & Fuel", "Shell", "--remove"]) == 0
     assert "now matches: QuikTrip" in capsys.readouterr().out
     assert main(base + ["budget-match", "No Such Line", "X"]) == 2
+
+
+def test_transactions_tab_move_and_exclude(tmp_path, capsys):
+    base = _setup(tmp_path)
+    assert main(base + ["sheet", "--no-open"]) == 0
+    capsys.readouterr()
+    path = tmp_path / "budget.xlsx"
+    wb = openpyxl.load_workbook(path)
+    assert "Transactions" in wb.sheetnames and wb["Lists"].sheet_state == "hidden"
+    wt = wb["Transactions"]
+    hdr = {wt.cell(4, c).value: c for c in range(1, wt.max_column + 1)}
+    assert list(hdr) == ["Date", "Budget line", "Merchant", "Bank description", "Account", "Amount",
+                         "Bank category", "Why it's here", "Move to line", "Note", "ID"]
+    assert wt.auto_filter.ref.startswith("A4:K") and wt.column_dimensions["K"].hidden
+    rows = list(range(5, wt.max_row + 1))
+    dates = [wt.cell(r, 1).value for r in rows]
+    assert dates == sorted(dates, reverse=True)  # newest first
+    best_buy = [r for r in rows if wt.cell(r, hdr["Merchant"]).value == "Best Buy"]
+    steakhouse = next(r for r in rows if wt.cell(r, hdr["Merchant"]).value == "Lakeside Steakhouse")
+    assert len(best_buy) == 2
+    wt.cell(best_buy[0], hdr["Move to line"]).value = "Exclude"          # the duplicate we got refunded
+    wt.cell(steakhouse, hdr["Move to line"]).value = "Gifts"              # it was a birthday dinner
+    wt.cell(steakhouse, hdr["Note"]).value = "Mom's birthday"
+    wb.save(path)
+
+    assert main(base + ["transactions", "Best Buy"]) == 0
+    out = capsys.readouterr().out
+    assert "1 transactions · $89.99" in out  # the excluded one is gone from spending
+    assert main(base + ["transactions", "Steakhouse"]) == 0
+    assert "Gifts" in capsys.readouterr().out
+
+    assert main(base + ["sheet", "--no-open"]) == 0  # choices survive a refresh
+    capsys.readouterr()
+    wt = openpyxl.load_workbook(path)["Transactions"]
+    moved = {wt.cell(r, hdr["Merchant"]).value: (wt.cell(r, hdr["Budget line"]).value,
+                                                wt.cell(r, hdr["Move to line"]).value,
+                                                wt.cell(r, hdr["Bank category"]).value, wt.cell(r, hdr["Note"]).value)
+             for r in range(5, wt.max_row + 1) if wt.cell(r, hdr["Move to line"]).value}
+    assert moved["Lakeside Steakhouse"] == ("Gifts", "Gifts", "Dining Out", "Mom's birthday")
+    assert moved["Best Buy"][1] == "Exclude"
+
+
+def test_ignored_accounts_stay_out_of_the_budget(cfg):
+    from finagent.categorize import enrich
+    rows = enrich([tx("2026-10-01", -45.0, "AMZN Mktp US*1", "Shopping", account="Influencer Card ••9", n=1),
+                   tx("2026-10-01", -45.0, "KROGER", "Groceries", account="Checking", n=2)],
+                  {"categories": {"ignore_accounts": ["influencer card"]}})
+    assert [t.payee for t in rows] == ["KROGER"]
+
+
+def test_excluded_transactions_stay_listed_and_can_be_undone(tmp_path, capsys):
+    base = _setup(tmp_path)
+    assert main(base + ["sheet", "--no-open"]) == 0
+    path = tmp_path / "budget.xlsx"
+
+    def best_buy_rows():
+        wt = openpyxl.load_workbook(path)["Transactions"]
+        col = {wt.cell(4, c).value: c for c in range(1, wt.max_column + 1)}
+        return wt, col, [r for r in range(5, wt.max_row + 1) if wt.cell(r, col["Merchant"]).value == "Best Buy"]
+
+    wt, col, rows = best_buy_rows()
+    wt.cell(rows[0], col["Move to line"]).value = "Exclude"
+    wt.parent.save(path)
+    assert main(base + ["sheet", "--no-open"]) == 0
+    wt, col, rows = best_buy_rows()
+    assert len(rows) == 2 and sorted(wt.cell(r, col["Budget line"]).value for r in rows)[0] == "Excluded"
+    excluded = next(r for r in rows if wt.cell(r, col["Budget line"]).value == "Excluded")
+    assert wt.cell(excluded, col["Why it's here"]).value == "You excluded it"
+    wt.cell(excluded, col["Move to line"]).value = None  # changed my mind
+    wt.parent.save(path)
+    capsys.readouterr()
+    assert main(base + ["transactions", "Best Buy"]) == 0
+    assert "2 transactions" in capsys.readouterr().out

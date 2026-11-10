@@ -60,6 +60,14 @@ merchant names or bank categories that belong to it (comma-separated; `Apple $2.
 spending that fits no line appears under "Not in your plan yet". When they want a line to capture more spending,
 add the merchant or category to its Matches rather than renaming categories.
 
+When a line's average looks wrong ("that doesn't add up"), show what's behind it before changing anything:
+`python3 -m finagent transactions "<line or merchant>"` lists the transactions with **why** each landed there (the
+Matches word, the bank category, or their own choice). It also gives 3- and 6-month averages per line and the
+biggest merchants. Usually a Matches word is too broad. "Disney" catches park tickets, so `Disney+` is better.
+A whole bank category like "Hair & Beauty" sweeps in cosmetics and nails along with haircuts. Fix it with a
+narrower word or an amount (`Hulu $18.99`). For one-off mistakes, use the Transactions tab in budget.xlsx: the
+"Move to line" dropdown re-files a transaction, and "Exclude" removes things that aren't household spending.
+
 If they have a giving goal (e.g. a 10% tithe — `python3 -m finagent sheet --giving-goal 10`), treat restoring it
 as the first priority: the review's first insight shows the gap and which changes fund it. Never propose
 reaching it by cutting other giving.

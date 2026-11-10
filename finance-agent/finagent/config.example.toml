@@ -74,6 +74,8 @@ card_payments = "auto"             # auto: payments to cards you haven't connect
                                    # ("Credit Card Payments"); connected cards' purchases are counted instead
                                    # spending: always count card payments · transfer: never count them
 ignore = []                        # categories to drop entirely, e.g. ["Reimbursable"]
+ignore_accounts = []               # accounts left out of the budget, e.g. ["Amazon Card"] for a card used only
+                                   # for business / influencer purchases (matched against the account name)
 
 [categories.merchant_rules]        # normalized merchant → category (for uncategorized rows)
 # "Chick-fil-A" = "Dining Out"

@@ -217,6 +217,12 @@ python3 -m finagent sheet
   make it a line, or add its name to an existing line's Matches.
 - **Income tab:** every income source with a **Regular income?** Yes/No dropdown. Mark your paychecks *Yes* and
   one-time money (tax refunds, settlements, gifts) *No*. Only *Yes* income counts toward your budget.
+- **Transactions tab:** every expense from the last 6 months, newest first, with the budget line it landed on and
+  **Why it's here**: the Matches word that caught it (`Matches "Apple"`), its bank category, or your own choice.
+  Use the filter arrows to review one line. If a line's average looks wrong, this tab shows which transactions
+  are behind it. To file one transaction somewhere else, pick a line in the yellow **Move to line** dropdown. Pick
+  **Exclude** for anything that isn't household spending. Excluded rows stay listed in grey, and clearing the cell
+  undoes it.
 
 Already have your budget lines in another workbook (for example, a starter built from your old budgeting app)?
 `finagent sheet --import ~/Downloads/starter.xlsx` uses its lines and keeps your Income tab choices.
@@ -246,6 +252,12 @@ finagent decides for you, so nothing is counted twice:
   card's purchases are already counted one by one.
 
 To count every card payment regardless, set `card_payments = "spending"` under `[categories]` in `config.toml`.
+A card payment is only ever filed under a debt line (such as *Credit Card Payments* or *Apple Card*), never under
+a merchant line that happens to share a word with the card.
+
+A card used only for business or influencer purchases, paid back so it never touches the household budget, can be
+left out entirely: connect it and add its name under `ignore_accounts` in `[categories]`, for example
+`ignore_accounts = ["Amazon Card"]`. To skip a single purchase instead, use **Exclude** on the Transactions tab.
 
 ### Regular vs. one-time income
 
@@ -269,6 +281,8 @@ set rules in `config.toml` (`[income] regular = [...]` / `one_time = [...]`).
 | `finagent sheet` | Create or refresh `budget.xlsx`, where you edit budgets and income choices in Excel. |
 | `finagent budgets` | Your budgets next to what you actually spend, and what's left to save. |
 | `finagent budget-set "Dining Out=900"` | Change one or more budgets. `=0` removes one. |
+| `finagent transactions "Apple"` | Every expense on a budget line, or matching a merchant or any text, with why each landed there. Shows 3- and 6-month averages per line and the biggest merchants. `--months`, `--limit`. |
+| `finagent budget-match "Gas & Fuel" "Convenience Stores"` | Add words to a line's Matches. `--replace` swaps them all, and `--remove` takes one out. |
 | `finagent keys` | Save API keys to a private file with hidden input. `--plaid` asks for Plaid keys only; `--show` lists what's saved. |
 | `finagent run weekly\|monthly` | `sync` + report + email. Built for schedulers. |
 | `finagent status` | What's in the database. |
