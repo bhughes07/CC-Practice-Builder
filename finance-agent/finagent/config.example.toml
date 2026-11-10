@@ -42,6 +42,7 @@ client_name = "finagent"           # shown in the Plaid window
 [analysis]
 review_months = 6                  # 3–6 is the sweet spot for the review
 savings_rate_target = 0.15
+giving_goal = 0.0                  # e.g. 0.10 = give 10% of regular income (also settable in budget.xlsx)
 min_monthly_impact = 5.0           # hide suggestions worth less than this per month
 large_transaction = 150.0          # floor for "unusual purchase" flags
 # Never suggested as cuts. Matched (case-insensitive) against "<group> <category>".
@@ -69,6 +70,9 @@ path = "budget.xlsx"
 
 [categories]
 force_merchant_rules = false       # true = merchant rules override existing categories too
+card_payments = "auto"             # auto: payments to cards you haven't connected count as spending
+                                   # ("Credit Card Payments"); connected cards' purchases are counted instead
+                                   # spending: always count card payments · transfer: never count them
 ignore = []                        # categories to drop entirely, e.g. ["Reimbursable"]
 
 [categories.merchant_rules]        # normalized merchant → category (for uncategorized rows)

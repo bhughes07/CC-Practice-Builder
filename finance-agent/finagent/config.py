@@ -56,6 +56,7 @@ DEFAULTS: dict[str, Any] = {
         "min_monthly_impact": 5.0,  # hide suggestions worth less than this per month
         "large_transaction": 150.0,  # floor for "unusual transaction" flags
         "savings_rate_target": 0.15,
+        "giving_goal": 0.0,  # e.g. 0.10 to aim for giving 10% of regular income (set it in budget.xlsx too)
     },
     # Which income counts as "regular" (what the budget is built on). Your budget spreadsheet's Income
     # tab overrides these per source. Patterns are matched against payee / category text.
@@ -76,6 +77,9 @@ DEFAULTS: dict[str, Any] = {
         # Category → class override: essential | discretionary | giving |
         # savings | debt | fees | other
         "class_overrides": {},
+        # Credit-card payments: "auto" counts a payment as spending unless the card is also connected
+        # (then its purchases are already counted); "spending" always counts them; "transfer" never does.
+        "card_payments": "auto",
         # Categories to ignore entirely (e.g. reimbursable work expenses).
         "ignore": [],
     },

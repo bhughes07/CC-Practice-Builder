@@ -158,8 +158,10 @@ def generate(today: date | None = None, months: int = 12, seed: int = 7) -> tupl
                 "Home Maintenance", "Housing")
 
         # Card payment (transfer — excluded from spending)
-        add(day(m, 25), -rng.uniform(2600, 3100), "VISA CARD PAYMENT", "", "", "Checking", transfer=True)
-        add(day(m, 25), rng.uniform(2600, 3100), "PAYMENT THANK YOU", "", "", "Visa Card", transfer=True)
+        card_payment = round(rng.uniform(2600, 3100), 2)
+        rng.uniform(2600, 3100)  # keep the random sequence (and every other demo number) unchanged
+        add(day(m, 25), -card_payment, "VISA CARD PAYMENT", "", "", "Checking", transfer=True)
+        add(day(m, 25), card_payment, "PAYMENT THANK YOU", "", "", "Visa Card", transfer=True)
 
         m = add_months(m, 1)
         idx += 1

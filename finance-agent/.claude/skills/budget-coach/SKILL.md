@@ -60,6 +60,13 @@ merchant names or bank categories that belong to it (comma-separated; `Apple $2.
 spending that fits no line appears under "Not in your plan yet". When they want a line to capture more spending,
 add the merchant or category to its Matches rather than renaming categories.
 
+If they have a giving goal (e.g. a 10% tithe — `python3 -m finagent sheet --giving-goal 10`), treat restoring it
+as the first priority: the review's first insight shows the gap and which changes fund it. Never propose
+reaching it by cutting other giving.
+
+Credit-card payments from checking count as spending ("Credit Card Payments") unless that card is connected, in
+which case its purchases are already counted individually.
+
 Only *regular* income counts (paychecks and scheduled deposits). Tax refunds, settlements and other one-time
 money are reported separately as "Not counted as regular income" — never build a budget on them. If income
 looks wrong, have them check the Income tab's Yes/No choices.

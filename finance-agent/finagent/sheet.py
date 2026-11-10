@@ -34,7 +34,7 @@ BUDGET_HEADERS = ["Group", "Budget line", "Monthly budget", "Matches", "Avg last
                   "Last month", "Budget vs. recent", "Type", "Notes"]
 INCOME_HEADERS = ["Source", "Category", "Deposits", "Avg per month", "Total", "Last deposit", "Regular income?",
                   "Notes"]
-BUDGET_HEADER_ROW, INCOME_HEADER_ROW = 13, 5
+BUDGET_HEADER_ROW, INCOME_HEADER_ROW = 15, 5
 NOT_IN_PLAN, SEPARATOR = "not in plan", "Not in your plan yet"
 ACCENT, YELLOW, GREY, WHITE = "1D6B57", "FFF4CC", "F1F3F5", "FFFFFF"
 
@@ -68,6 +68,7 @@ class SheetData:
     income: dict[str, bool] = field(default_factory=dict)
     income_notes: dict[str, str] = field(default_factory=dict)
     target_rate: float | None = None
+    giving_goal: float | None = None
 
 
 def _yes(value) -> bool | None:
@@ -143,6 +144,10 @@ def read_sheet(path: Path) -> SheetData:
                 v = _number(ws.cell(r, 3).value)
                 if v:
                     data.target_rate = v / 100 if v > 1 else v
+            if label.startswith("giving goal (%"):
+                v = _number(ws.cell(r, 3).value)
+                if v is not None:
+                    data.giving_goal = v / 100 if v > 1 else v
     if INCOME in wb.sheetnames:
         ws = wb[INCOME]
         hr = _find_header(ws, ("Source", "Regular income?"), INCOME_HEADER_ROW)
@@ -164,11 +169,12 @@ def merge_import(existing: SheetData | None, incoming: SheetData) -> SheetData:
     merged = SheetData(lines=list(incoming.lines), budgets=dict(incoming.budgets), blank=set(incoming.blank),
                        groups=dict(incoming.groups), matches=dict(incoming.matches), notes=dict(incoming.notes),
                        income=dict(incoming.income), income_notes=dict(incoming.income_notes),
-                       target_rate=incoming.target_rate)
+                       target_rate=incoming.target_rate, giving_goal=incoming.giving_goal)
     if existing:
         merged.income = {**existing.income, **merged.income}
         merged.income_notes = {**existing.income_notes, **merged.income_notes}
         merged.target_rate = merged.target_rate or existing.target_rate
+        merged.giving_goal = merged.giving_goal if merged.giving_goal is not None else existing.giving_goal
     return merged
 
 
@@ -183,6 +189,8 @@ def configure(cfg, data: SheetData) -> None:
     income["sources"] = {**(income.get("sources") or {}), **data.income}
     if data.target_rate:
         cfg["analysis"]["savings_rate_target"] = data.target_rate
+    if data.giving_goal is not None:
+        cfg["analysis"]["giving_goal"] = data.giving_goal
 
 
 def apply_sheet(cfg) -> str | None:
@@ -205,7 +213,7 @@ def apply_sheet(cfg) -> str | None:
 
 def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: list[str], months3: list[str],
                 currency: str = "$", existing: SheetData | None = None, config_budgets: dict | None = None,
-                target_rate: float = 0.15) -> Path:
+                target_rate: float = 0.15, giving_goal: float = 0.0) -> Path:
     """Create or refresh the workbook. What you typed (in `existing`) always wins over suggestions.
     `L` must already be built with the budget-line matching in effect, so averages are per line."""
     openpyxl = require_openpyxl()
@@ -290,6 +298,8 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         ("Still to find to hit the target", "=MAX(0,C4*C8-C6)", money, False),
         ("Spending not in your plan (3-mo avg)", f'=SUMIFS(E{first}:E{last},I{first}:I{last},"{NOT_IN_PLAN}")',
          money, False),
+        ("Giving goal (% of regular income)", giving_goal, "0%", True),
+        ("Giving goal per month", "=C4*C11", money, False),
     ]
     for i, (label, value, fmt, editable) in enumerate(summary):
         r = 4 + i

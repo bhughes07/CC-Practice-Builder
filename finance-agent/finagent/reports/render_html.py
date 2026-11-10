@@ -105,6 +105,8 @@ def _impact(i: Insight, cur: str) -> str:
         bits.append(pill("plan ahead", "info"))
     if not bits and i.kind == "opportunity":
         bits.append(pill("opportunity", "info"))
+    if not bits and i.kind == "goal":
+        bits.append(pill("your goal", "accent"))
     return " ".join(bits)
 
 

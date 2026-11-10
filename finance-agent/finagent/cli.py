@@ -809,6 +809,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("budgets", help="your budgets vs. what you actually spend")
     sp = sub.add_parser("sheet", help="create/refresh budget.xlsx — edit budgets and income in Excel")
     sp.add_argument("--no-open", action="store_true", help="don't open it afterwards")
+    sp.add_argument("--giving-goal", type=float, metavar="PERCENT",
+                    help="aim to give this %% of regular income, e.g. --giving-goal 10")
     sp.add_argument("--import", dest="import_file", metavar="FILE",
                     help="use the budget lines from another workbook (e.g. a starter); keeps your Income choices")
     sp.add_argument("--trim", type=float, default=10.0, help="percent below average for suggested lifestyle budgets")
@@ -866,6 +868,9 @@ def cmd_sheet(args, cfg: Config) -> int:
         existing = sheet.merge_import(existing, incoming)
         _say(f"Importing {len(incoming.lines)} budget lines from {src.name}"
              + (" (your Income tab choices are kept)." if path.exists() else "."))
+    if args.giving_goal is not None:
+        existing = existing or sheet.SheetData()
+        existing.giving_goal = args.giving_goal / 100 if args.giving_goal > 1 else args.giving_goal
     if existing:
         sheet.configure(cfg, existing)  # file spending under your lines before computing averages
     with _store(cfg, args) as store:
@@ -875,7 +880,12 @@ def cmd_sheet(args, cfg: Config) -> int:
         suggestions = suggest(L, A3, args.trim)
         config_budgets = {} if existing else dict(cfg.get("budgets") or {})
         sheet.write_sheet(path, L, suggestions, A6.months, A3.months, cfg.currency, existing, config_budgets,
-                          float(cfg["analysis"].get("savings_rate_target", 0.15)))
+                          float(cfg["analysis"].get("savings_rate_target", 0.15)),
+                          float(cfg["analysis"].get("giving_goal") or 0.0))
+        if cfg["analysis"].get("giving_goal"):
+            A = Analysis(L, A6.months)  # same 6-month income average as the sheet's totals
+            _say(f"Giving goal: {A.giving_goal * 100:.0f}% of regular income = {money_auto(A.giving_target, cfg.currency)}"
+                 f"/mo (lately {money_auto(A.giving_recent, cfg.currency)}/mo).")
     if existing and not args.import_file:
         _say(f"Refreshed {path}: recent averages updated; your lines, budgets, matches, notes and Yes/No choices "
              f"were kept (previous copy saved as {path.stem}.backup.xlsx).")

@@ -67,7 +67,8 @@ def test_kinds_transfers_income_savings(cfg):
     rows = enrich([
         tx("2026-10-01", 2450, "ACME PAYROLL"),                     # uncategorized payroll → income
         tx("2026-10-02", -300, "Transfer to Savings", is_transfer=True),
-        tx("2026-10-03", -2800, "CHASE CREDIT CRD AUTOPAY"),        # card payment → transfer
+        tx("2026-10-03", -2800, "CHASE CREDIT CRD AUTOPAY", account="Checking"),  # paid to a connected card…
+        tx("2026-10-04", 2800, "PAYMENT THANK YOU", account="Chase Card"),        # …which shows the payment → transfer
         tx("2026-10-04", -200, "Vanguard", "Retirement", "Savings"),  # saving isn't spending
         tx("2026-10-05", -50, "KROGER #512"),                       # guessed Groceries → expense
         tx("2026-10-06", 45.99, "AMZN Mktp US Refund", "Shopping"),  # refund stays an expense (negative spend)
@@ -75,7 +76,7 @@ def test_kinds_transfers_income_savings(cfg):
     kinds = {t.payee: (t.kind, t.category) for t in rows}
     assert kinds["ACME PAYROLL"][0] == "income"
     assert kinds["Transfer to Savings"][0] == "transfer"
-    assert kinds["CHASE CREDIT CRD AUTOPAY"][0] == "transfer"
+    assert kinds["CHASE CREDIT CRD AUTOPAY"][0] == "transfer" and kinds["PAYMENT THANK YOU"][0] == "transfer"
     assert kinds["Vanguard"][0] == "transfer"
     assert kinds["KROGER #512"] == ("expense", "Groceries")
     assert kinds["AMZN Mktp US Refund"][0] == "expense"
@@ -106,7 +107,7 @@ def test_budget_line_matching_rules():
         tx("2026-10-03", -42.0, "APPLEBEES 123", "Dining Out", n=3),       # not "Apple": word boundary
         tx("2026-10-04", -6.5, "STARBUCKS 99", "Coffee Shops", n=4),        # merchant term
         tx("2026-10-05", -180.0, "TXU ENERGY", "Gas & Electric", "Utilities", n=5),  # category term
-        tx("2026-10-06", -900.0, "CARD PAYMENT", "", is_transfer=True, n=6),
+        tx("2026-10-06", -900.0, "TRANSFER TO SAVINGS", "", is_transfer=True, n=6),
         tx("2026-10-07", 2450.0, "ACME PAYROLL", "Paycheck", "Income", n=7),
     ], cfg)
     got = {t.payee: (t.category, t.category_group) for t in rows}
@@ -114,4 +115,26 @@ def test_budget_line_matching_rules():
     assert sorted(t.category for t in rows if t.payee == "APPLE.COM/BILL") == ["Apple", "iCloud"]
     assert got["APPLEBEES 123"] == ("Food Out", "Food") and got["STARBUCKS 99"] == ("Food Out", "Food")
     assert got["TXU ENERGY"] == ("Power", "House")
-    assert got["CARD PAYMENT"][0] == "" and got["ACME PAYROLL"][0] == "Paycheck"  # transfers & income untouched
+    assert got["TRANSFER TO SAVINGS"][0] == "" and got["ACME PAYROLL"][0] == "Paycheck"  # untouched
+
+
+def test_card_payments_count_unless_the_card_is_connected():
+    def rows(mode=None):
+        cfg = {"categories": {"card_payments": mode}} if mode else {}
+        return {t.payee: t for t in enrich([
+            tx("2026-10-01", -250.0, "DISCOVER E-PAYMENT", account="Checking", n=1),  # card not connected
+            tx("2026-10-03", -900.0, "CHASE CREDIT CRD EPAY", "Credit Card Payment", "Transfers",
+               account="Checking", is_transfer=True, n=2),
+            tx("2026-10-05", 900.0, "Payment Thank You", "Transfer", "Transfers", account="Chase ••3333",
+               is_transfer=True, n=3),                                               # Chase is connected
+            tx("2026-10-07", -60.0, "KROGER", "Groceries", account="Chase ••3333", n=4),
+        ], cfg)}
+    auto = rows()
+    assert auto["DISCOVER E-PAYMENT"].kind == "expense" and auto["DISCOVER E-PAYMENT"].category == "Credit Card Payments"
+    assert auto["DISCOVER E-PAYMENT"].cls == "debt" and "card payment" in auto["DISCOVER E-PAYMENT"].flags
+    assert auto["CHASE CREDIT CRD EPAY"].kind == "transfer"  # its purchases (Kroger) are already counted
+    assert auto["KROGER"].kind == "expense"
+    always = rows("spending")
+    assert always["CHASE CREDIT CRD EPAY"].kind == "expense" and always["DISCOVER E-PAYMENT"].kind == "expense"
+    never = rows("transfer")
+    assert never["DISCOVER E-PAYMENT"].kind == "transfer"

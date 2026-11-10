@@ -374,6 +374,12 @@ def build_monthly(ledger: Ledger, month: str, A: Analysis) -> Report:
          "sub": f"{rate * 100:.0f}% of income (target {A.savings_target * 100:.0f}%)" if rate is not None else "",
          "tone": "good" if rate is not None and rate >= A.savings_target else "bad" if net < 0 else ""},
     ]
+    if A.giving_goal and income:
+        given = sum(v for c, v in ledger.spend_by_category(ms, me).items() if ledger.class_of(c) == CLASS_GIVING)
+        kpis.append({"label": "Giving", "value": m(given),
+                     "sub": f"{given / income * 100:.0f}% of income · goal {A.giving_goal * 100:.0f}% "
+                            f"({m(income * A.giving_goal)})",
+                     "tone": "good" if given >= income * A.giving_goal - 5 else "bad"})
     if budget_total:
         kpis.append({"label": "vs. budget", "value": m(abs(spend - budget_total)),
                      "sub": f"{'over' if spend > budget_total else 'under'} a {m(budget_total)} budget",
@@ -472,6 +478,9 @@ def build_review(ledger: Ledger, A: Analysis) -> Report:
          "tone": "good" if rate is not None and rate >= A.savings_target else "bad"},
         {"label": "Fixed commitments", "value": m(fixed),
          "sub": f"{fixed / A.avg_income * 100:.0f}% of income is spoken for" if A.avg_income else "per month"},
+        *([{"label": "Giving", "value": f"{m(A.giving_recent)}/mo",
+             "sub": f"goal {A.giving_goal * 100:.0f}% = {m(A.giving_target)}/mo",
+             "tone": "good" if not A.giving_gap else "bad"}] if A.giving_goal else []),
         {"label": "Opportunity", "value": f"{m(A.potential_monthly)}/mo",
          "sub": f"{m(A.potential_monthly * 12)}/yr" + (f" + {m(A.potential_one_time)} to recover"
                                                        if A.potential_one_time else ""), "tone": "accent"},

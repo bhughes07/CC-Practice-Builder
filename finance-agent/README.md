@@ -230,6 +230,23 @@ previous copy is saved as `budget.backup.xlsx`.
   otherwise.
 - **Privacy:** the file is git-ignored, so it stays on your computer.
 
+### Giving goal
+
+To aim for a share of income, like a 10% tithe, run `finagent sheet --giving-goal 10` (or type it in the
+sheet's yellow *Giving goal* cell). Reports then show giving against the goal. When you're short, the first
+recommendation is a funding plan: which specific changes free up the money, and whether that covers it next
+month or should be stepped up. Giving is never suggested as a cut.
+
+### Credit-card payments
+
+finagent decides for you, so nothing is counted twice:
+- **Card not connected:** money that leaves checking to pay it counts as spending, on a line called
+  **Credit Card Payments**.
+- **Card connected:** finagent sees the payment arrive on the card and treats it as a transfer, because the
+  card's purchases are already counted one by one.
+
+To count every card payment regardless, set `card_payments = "spending"` under `[categories]` in `config.toml`.
+
 ### Regular vs. one-time income
 
 Budgets and savings rates use **regular income only**: paychecks, and deposits that arrive on a schedule. Tax

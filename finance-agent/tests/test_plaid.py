@@ -130,6 +130,7 @@ def test_sync_pages_mutation_restart_pending_and_accounts(tmp_path):
             ptx("t5", 18.40, "STARBUCKS", "FOOD_AND_DRINK_COFFEE", merchant="Starbucks", pending=True,
                 day="2026-10-06"),
             ptx("t6", -45.99, "AMAZON REFUND", "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES", merchant="Amazon"),
+            ptx("t4b", -900.00, "PAYMENT RECEIVED", "TRANSFER_IN_ACCOUNT_TRANSFER", account="acc-cc"),
         ], "modified": [], "removed": [], "next_cursor": "c2", "has_more": False, "accounts": ACCOUNTS,
             "transactions_update_status": "HISTORICAL_UPDATE_COMPLETE"},
         "c2": {"added": [ptx("t7", 21.15, "STARBUCKS", "FOOD_AND_DRINK_COFFEE", merchant="Starbucks",
@@ -145,7 +146,7 @@ def test_sync_pages_mutation_restart_pending_and_accounts(tmp_path):
         res = P.sync_item(client(fake), it, store)
         cursors = [b.get("cursor") for p, b in fake.calls if p == "/transactions/sync"]
         assert cursors == [None, "c1", None, "c1"]  # restarted from the ORIGINAL cursor
-        assert it["cursor"] == "c2" and res.added == 6 and it["status"] == "ok"
+        assert it["cursor"] == "c2" and res.added == 7 and it["status"] == "ok"
         rows = {t.id.split(":")[-1]: t for t in store.transactions()}
         assert "t3b" not in rows  # loan-account side is a balance tracker, not spending
         assert rows["t1"].amount == -84.12 and rows["t1"].payee == "Kroger" and rows["t1"].memo == "KROGER #512"

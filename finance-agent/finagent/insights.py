@@ -84,6 +84,7 @@ class Analysis:
         cfg = ledger.config.get("analysis", {})
         self.min_impact = float(cfg.get("min_monthly_impact", 5.0))
         self.savings_target = float(cfg.get("savings_rate_target", 0.15))
+        self.giving_goal = float(cfg.get("giving_goal") or 0.0)  # share of regular income, e.g. 0.10
         m = lambda v: money_auto(v, ledger.currency)  # noqa: E731
         self.m = m
 
@@ -172,6 +173,58 @@ class Analysis:
                          if i.monthly_impact >= self.min_impact or i.one_time > 0 or i.kind in ("protect", "opportunity")
                          or i.severity == "high" or i.always_show]
         self.insights.sort(key=lambda i: -i.score)
+        self._giving_goal_insight()  # goes first: it says what the freed-up money is for
+
+    # ------------------------------------------------------------------ giving goal
+    @property
+    def giving_recent(self) -> float:
+        """Average monthly giving over the recent months."""
+        cats = [c for c in self.cat_matrix if self.ledger.class_of(c) == CLASS_GIVING]
+        return round(sum(self.category_avg(c, self.recent) for c in cats), 2)
+
+    @property
+    def giving_target(self) -> float:
+        return round(self.avg_income * self.giving_goal, 2)
+
+    @property
+    def giving_gap(self) -> float:
+        return max(0.0, round(self.giving_target - self.giving_recent, 2)) if self.giving_goal else 0.0
+
+    def _giving_goal_insight(self) -> None:
+        if not self.giving_goal or not self.avg_income:
+            return
+        goal_pct = f"{self.giving_goal * 100:.0f}%"
+        target, recent, gap = self.giving_target, self.giving_recent, self.giving_gap
+        if gap < 5:
+            self.wins.insert(0, Win(f"Giving is at your {goal_pct} goal",
+                                    f"{self.m(recent)}/mo lately — {self.m(target)}/mo is {goal_pct} of regular "
+                                    f"income."))
+            return
+        funders, covered = [], 0.0
+        for i in self.insights:
+            if i.kind == "save" and i.monthly_impact > 0 and covered < gap:
+                funders.append(i)
+                covered += i.monthly_impact
+        steps = "; ".join(f"{i.area or i.title}: {self.m(i.monthly_impact)}/mo" for i in funders)
+        if funders and covered >= gap:
+            action = (f"Fund it from the changes below — together they free {self.m(covered)}/mo, enough to give "
+                      f"{self.m(target)} starting next month: {steps}. Set the giving amount first each month, then "
+                      f"the rest of the budget.")
+        elif funders:
+            first_step = recent + covered
+            action = (f"The changes below free about {self.m(covered)}/mo ({steps}). Step up: give "
+                      f"{self.m(first_step)} next month, then close the last {self.m(gap - covered)} as you trim more "
+                      f"— your weekly report shows the room each week.")
+        else:
+            action = (f"Set the giving line to {self.m(target)} first, then trim the largest flexible categories to "
+                      f"make room.")
+        self.insights.insert(0, Insight(
+            key="giving-goal",
+            title=f"Restore giving to {goal_pct}: {self.m(target)}/mo (lately {self.m(recent)}/mo)",
+            detail=f"{goal_pct} of your regular income ({self.m(self.avg_income)}/mo) is {self.m(target)}/mo. "
+                   f"You're {self.m(gap)}/mo short of it.",
+            action=action, monthly_impact=0.0, severity="high", area="Giving", kind="goal",
+            evidence=[f"{i.title}" for i in funders], always_show=True))
 
     def _txn_rate(self, cat: str) -> float:
         n = sum(1 for t in self.ledger.expenses_between(self.start, self.end) if t.category == cat and t.outflow > 0)
@@ -534,10 +587,19 @@ class Analysis:
             s = (f"Over the last {self.n} months you kept {self.m(kept)}/mo — {rate * 100:.0f}% of income "
                  f"(target {self.savings_target * 100:.0f}%).")
         if self.potential_monthly > 0:
-            new_rate = (kept + self.potential_monthly) / self.avg_income if self.avg_income else 0
             s += (f" Hitting the targets below would free up about {self.m(self.potential_monthly)}/mo "
                   f"({self.m(self.potential_monthly * 12)}/yr)")
-            s += f", lifting that to ~{new_rate * 100:.0f}%." if self.avg_income else "."
+            gap = self.giving_gap
+            if gap:
+                left = self.potential_monthly - gap
+                s += (f" — enough to restore giving to {self.giving_goal * 100:.0f}% ({self.m(self.giving_target)}/mo)"
+                      + (f" and still keep {self.m(kept + left)}/mo." if kept + left > 0 else "."))
+            else:
+                new_rate = (kept + self.potential_monthly) / self.avg_income if self.avg_income else 0
+                s += f", lifting that to ~{new_rate * 100:.0f}%." if self.avg_income else "."
+        elif self.giving_gap:
+            s += (f" Giving is {self.m(self.giving_gap)}/mo short of your {self.giving_goal * 100:.0f}% goal "
+                  f"({self.m(self.giving_target)}/mo).")
         return s
 
     def to_summary(self) -> dict:
@@ -561,6 +623,9 @@ class Analysis:
             "insights": [i.to_dict() for i in self.insights],
             "wins": [{"title": w.title, "detail": w.detail} for w in self.wins],
             "potential_monthly_savings": self.potential_monthly,
+            "giving_goal": ({"share_of_regular_income": self.giving_goal, "target_per_month": self.giving_target,
+                             "recent_per_month": self.giving_recent, "gap_per_month": self.giving_gap}
+                            if self.giving_goal else None),
             "potential_one_time_recovery": self.potential_one_time,
             "one_time_income_not_counted": [
                 {"source": t.merchant or t.payee, "amount": t.amount, "date": t.date.isoformat()}

@@ -196,3 +196,40 @@ def test_review_lists_one_time_money(demo):
     assert "Not counted as regular income: $2,140" in html and "IRS Treas 310 Tax Ref" in html
     assert A.to_summary()["one_time_income_not_counted"][0]["amount"] == 2140.0
     assert date(2026, 7, 14) in {t.date for t in ledger.one_time_incomes}
+
+
+def test_giving_goal_comes_first_with_a_funding_plan():
+    from finagent.insights import Analysis
+    txns, budgets = generate(TODAY)
+    no_giving = [t for t in txns if "Giving" not in t.payee]  # tithe currently 0
+    cfg = load_config(overrides={"analysis": {"giving_goal": 0.10}})
+    L = Ledger(no_giving, budgets, cfg, TODAY)
+    A = Analysis(L, L.available_months(6))
+    first = A.insights[0]
+    assert first.key == "giving-goal" and first.kind == "goal" and "Restore giving to 10%" in first.title
+    assert A.giving_target == round(A.avg_income * 0.10, 2) == 860.83  # 10% of 6-month regular income
+    assert A.giving_recent == 0 and A.giving_gap == A.giving_target
+    assert "Dining Out" in first.action and "starting next month" in first.action  # the cuts cover it
+    assert "restore giving to 10% ($861/mo)" in A.headline()
+    assert A.to_summary()["giving_goal"]["gap_per_month"] == 860.83
+
+    # Giving at the goal ($850/mo vs 9% = $775) is a win instead
+    L2 = Ledger(txns, budgets, load_config(overrides={"analysis": {"giving_goal": 0.09}}), TODAY)
+    A2 = Analysis(L2, L2.available_months(6))
+    assert all(i.key != "giving-goal" for i in A2.insights)
+    assert A2.wins[0].title == "Giving is at your 9% goal"
+
+
+def test_giving_goal_set_from_the_sheet(tmp_path, capsys):
+    base = _setup(tmp_path)
+    assert main(base + ["sheet", "--no-open", "--giving-goal", "10"]) == 0
+    assert "Giving goal: 10% of regular income = $861/mo (lately $850/mo)" in capsys.readouterr().out
+    ws = openpyxl.load_workbook(tmp_path / "budget.xlsx")["Budget"]
+    assert ws["A11"].value.startswith("Giving goal (%") and ws["C11"].value == 0.1
+    assert ws["C12"].value == "=C4*C11"
+    assert main(base + ["sheet", "--no-open"]) == 0  # refresh keeps the goal
+    capsys.readouterr()
+    assert openpyxl.load_workbook(tmp_path / "budget.xlsx")["Budget"]["C11"].value == 0.1
+    assert main(base + ["review", "--out", str(tmp_path / "r")]) == 0
+    html = next((tmp_path / "r").glob("review-*.html")).read_text()
+    assert "goal 10% = $861/mo" in html  # the Giving tile

@@ -303,6 +303,55 @@ def match_line(t: Transaction, compiled) -> tuple[str, str] | None:
     return (best[1], best[2]) if best else None
 
 
+CARD_PAYMENT = re.compile(
+    r"credit card payment|credit (card|crd) (payment|autopay|epay|pymt|pmt)|card ?(payment|pmt)|"
+    r"autopay payment|ach pmt.*card|payment to .*card|"
+    r"\b(visa|mastercard|amex|american express|discover|citi|capital one|synchrony|barclays?)\b.*"
+    r"\b(payment|pmt|autopay)\b", re.I)
+NOT_CARD = re.compile(r"mortgage|loan|auto pay(ment)? to|car pay|student|insurance", re.I)
+CARD_PAYMENTS_LINE = "Credit Card Payments"
+
+
+def _count_card_payments(txns: list[Transaction], mode: str) -> None:
+    """Decide which credit-card payments are spending.
+
+    auto     — a payment counts as spending ("Credit Card Payments") unless the money shows up on another
+               connected account (same amount, within a week): then that card's purchases are already counted
+               one by one and counting the payment too would count the same dollars twice.
+    spending — every card payment counts (cash-flow view: what leaves checking).
+    transfer — never count card payments (purchases view).
+    """
+    def is_card_payment(t: Transaction) -> bool:
+        if t.amount >= 0 or NOT_CARD.search(f"{t.payee} {t.category}"):
+            return False
+        if CARD_PAYMENT.search(t.category):
+            return True
+        # Only trust the description when the source didn't already file it as something else.
+        loose = t.category.strip().lower() in UNCATEGORIZED or t.is_transfer or "transfer" in t.category.lower()
+        return loose and bool(CARD_PAYMENT.search(t.payee))
+
+    outs = [t for t in txns if is_card_payment(t)]
+    if mode == "transfer":
+        for o in outs:
+            o.is_transfer = True
+        return
+    used: set[str] = set()
+    for o in sorted(outs, key=lambda t: t.date):
+        if mode == "auto":
+            match = next((i for i in txns if i.amount > 0 and i.id not in used and i.account != o.account
+                          and abs(i.amount + o.amount) < 0.01 and abs((i.date - o.date).days) <= 7
+                          and not PAYCHECK_HINT.search(f"{i.payee} {i.category}")), None)
+            if match:
+                used.add(match.id)
+                continue
+        o.is_transfer = False
+        o.category, o.category_group = CARD_PAYMENTS_LINE, "Debt"
+        o.flags.add("card payment")
+
+
+PAYCHECK_HINT = re.compile(r"payroll|paycheck|salary|wages|direct dep", re.I)
+
+
 def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Transaction]:
     """Fill merchant / category guesses / class / kind. Returns a new sorted list."""
     cats = (config or {}).get("categories", {}) if config else {}
@@ -311,6 +360,8 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
     overrides: dict[str, str] = cats.get("class_overrides", {}) or {}
     ignore = {c.lower() for c in (cats.get("ignore", []) or [])}
     lines = compile_line_rules(cats.get("line_rules"))
+    txns = list(txns)
+    _count_card_payments(txns, str(cats.get("card_payments", "auto")).lower())
     out: list[Transaction] = []
     for t in txns:
         if t.category.lower() in ignore:
@@ -323,6 +374,8 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
             if guess != "Uncategorized" or not t.category:
                 t.category = guess
         t.cls = category_class(t.category, t.category_group, overrides)
+        if "card payment" in t.flags:
+            t.cls = CLASS_DEBT  # money leaving checking for a card that isn't connected: real spending
         # Your own budget lines (from the spreadsheet's Matches column) re-file spending under your names.
         if lines and not t.is_transfer and t.cls not in (CLASS_INCOME, CLASS_TRANSFER):
             hit = match_line(t, lines)
