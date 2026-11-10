@@ -807,6 +807,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("items", nargs="+", metavar='"Category=Amount"', help="use 0 to remove a budget line")
     sp.add_argument("--new", action="store_true", help="allow a category name that isn't in your data yet")
     sub.add_parser("budgets", help="your budgets vs. what you actually spend")
+    sp = sub.add_parser("budget-match", help='file transactions under a line, e.g. budget-match "Gas" "Convenience Stores"')
+    sp.add_argument("line", help="the budget line, as written on the Budget tab")
+    sp.add_argument("terms", nargs="+", help="merchant names or bank categories (\"Apple $2.99\" matches an amount)")
+    sp.add_argument("--replace", action="store_true", help="replace the line's Matches instead of adding")
+    sp.add_argument("--remove", action="store_true", help="remove these terms from the line's Matches")
     sp = sub.add_parser("sheet", help="create/refresh budget.xlsx — edit budgets and income in Excel")
     sp.add_argument("--no-open", action="store_true", help="don't open it afterwards")
     sp.add_argument("--giving-goal", type=float, metavar="PERCENT",
@@ -915,6 +920,19 @@ def _open_file(path: Path) -> None:
         _say(f"Open it from: {path}")
 
 
+def cmd_budget_match(args, cfg: Config) -> int:
+    """Tell finagent which transactions belong to a budget line (edits the Matches cell)."""
+    from finagent import sheet
+    path = sheet.sheet_path(cfg)
+    if not path.exists():
+        raise CLIError("Matches live in your budget spreadsheet — create it first with `finagent sheet`.")
+    mode = "replace" if args.replace else "remove" if args.remove else "add"
+    line, terms = sheet.set_matches(path, args.line, args.terms, mode)
+    _say(f'{line} now matches: {", ".join(terms) if terms else "(nothing — only its own category name)"}')
+    _say("Run `finagent sheet` (with the file closed in Excel) to recalculate what each line has been spending.")
+    return 0
+
+
 COMMANDS = {
     "init": cmd_init, "status": cmd_status, "sync": cmd_sync, "import": cmd_import, "itemize": cmd_itemize,
     "subscriptions": cmd_subscriptions, "review": cmd_review, "weekly": cmd_weekly, "monthly": cmd_monthly,
@@ -924,6 +942,7 @@ COMMANDS = {
     "budget-set": cmd_budget_set,
     "budgets": cmd_budgets,
     "sheet": cmd_sheet,
+    "budget-match": cmd_budget_match,
 }
 
 

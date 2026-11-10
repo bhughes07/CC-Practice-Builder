@@ -233,3 +233,49 @@ def test_giving_goal_set_from_the_sheet(tmp_path, capsys):
     assert main(base + ["review", "--out", str(tmp_path / "r")]) == 0
     html = next((tmp_path / "r").glob("review-*.html")).read_text()
     assert "goal 10% = $861/mo" in html  # the Giving tile
+
+
+def test_bank_ach_descriptors_group_into_one_source(cfg):
+    from finagent.categorize import normalize_merchant as n
+    a = n("Acme Corp Des:payroll Id:xxxxxxxxxx0039q Indn:doe,jane Q Co Id:xxxxx11101 Ppd")
+    b = n("ACME CORP DES:PAYROLL ID:XXXXXXXXXX7739Q INDN:DOE,JANE Q CO ID:XXXXX11101 PPD")
+    c = n("ACME CORP DES:PAYROLL ID:XXXXXXXXXX1939Q INDN:DOE,JOHN C CO ID:XXXXX11101 PPD")
+    assert a == b == "Acme Corp Payroll (Jane)" and c == "Acme Corp Payroll (John)"
+    assert n("IRS TREAS 310 DES:TAX REF ID:XXXXX00918 INDN:DOE, JANE & JOHN CO ID:XXX36170 PPD") == "IRS Treas 310 Tax Ref"
+    assert n("LAKEVIEW LOAN SRV DES:MTG PYMT ID:000012345 INDN:DOE JANE CO ID:XXXX PPD") == "Lakeview Loan Srv Mtg Pymt"
+    pays = [tx(date(2026, m, d), 2500.0, f"ACME CORP DES:PAYROLL ID:XX{m}{d}Q INDN:DOE,JANE CO ID:XX1 PPD",
+               "Paycheck", "Income", n=m * 100 + d) for m in range(5, 11) for d in (1, 15)]
+    L = Ledger(pays, [], cfg, TODAY)
+    sources = L.income_sources(date(2026, 5, 1), date(2026, 10, 31))
+    assert [(s["source"], s["count"]) for s in sources] == [("Acme Corp Payroll (Jane)", 12)]
+
+
+def test_zero_budgets_grouping_notes_and_matches(tmp_path, capsys):
+    base = _setup(tmp_path)
+    assert main(base + ["sheet", "--no-open"]) == 0
+    capsys.readouterr()
+    path = tmp_path / "budget.xlsx"
+    wb = openpyxl.load_workbook(path)
+    ws = wb["Budget"]
+    hr, col, rows = _cols(ws)
+    # Make "Coffee Shops" an explicit $0 plan, and give a line an old-style note
+    ws.cell(rows["Coffee Shops"], 3).value = 0
+    ws.cell(rows["Mortgage"], col["Notes"]).value = (
+        "Card payments are transfers in finagent: purchases on the card are already counted line by line. "
+        "Keep a budget here only for paying down an old balance.")
+    wb.save(path)
+    assert main(base + ["sheet", "--no-open"]) == 0
+    capsys.readouterr()
+    ws = openpyxl.load_workbook(path)["Budget"]
+    hr, col, rows = _cols(ws)
+    assert ws.cell(rows["Coffee Shops"], 3).value == 0  # a typed $0 survives refresh
+    assert ws.cell(rows["Mortgage"], col["Notes"]).value.startswith("Card payments from checking land here")
+    groups = [ws.cell(r, 1).value for r in range(hr + 1, ws.max_row + 1) if ws.cell(r, 2).value
+              and ws.cell(r, col["Type"]).value != "not in plan"]
+    assert groups == sorted(groups, key=lambda g: groups.index(g))  # each group's lines are together
+
+    assert main(base + ["budget-match", "Gas & Fuel", "QuikTrip", "Shell"]) == 0
+    assert "Gas & Fuel now matches: QuikTrip, Shell" in capsys.readouterr().out
+    assert main(base + ["budget-match", "Gas & Fuel", "Shell", "--remove"]) == 0
+    assert "now matches: QuikTrip" in capsys.readouterr().out
+    assert main(base + ["budget-match", "No Such Line", "X"]) == 2

@@ -119,14 +119,47 @@ def _titlecase(s: str) -> str:
     return " ".join(words)
 
 
+# Bank ACH descriptors: "COMPANY DES:DESCRIPTION ID:XXXX0039Q INDN:LAST,FIRST M CO ID:XXXXX11101 PPD".
+# The ID changes on every deposit/payment, so keep only company + description (+ first name for payroll).
+_ACH = re.compile(r"^(?P<co>.+?)\s+DES:\s*(?P<des>.*?)\s*(?=\bID:|\bINDN:|\bCO ID:|$)", re.I)
+_INDN = re.compile(r"\bINDN:\s*(?P<indn>.*?)\s*(?=\bCO ID:|\bID:|\b(?:PPD|CCD|WEB|TEL)\b|$)", re.I)
+
+
+def _ach_parts(raw: str) -> tuple[str, str] | None:
+    m = _ACH.match(raw)
+    if not m:
+        return None
+    co, des = m.group("co").strip(), m.group("des").strip(" :")
+    base = f"{co} {des}" if des and des.lower() not in co.lower() else co
+    first = ""
+    if re.search(r"payroll|salary|\bpay\b|\bpr\b", des, re.I):
+        im = _INDN.search(raw)
+        if im:
+            indn = im.group("indn").strip()
+            part = indn.split(",", 1)[1] if "," in indn else indn
+            words = part.replace("&", " ").split()
+            first = words[0].title() if words else ""
+    return base, first
+
+
 def normalize_merchant(payee: str) -> str:
-    """'SQ *BLUE BOTTLE COFFEE #123 DALLAS TX' → 'Blue Bottle Coffee'; 'AMZN Mktp US*2K4' → 'Amazon'."""
+    """'SQ *BLUE BOTTLE COFFEE #123 DALLAS TX' → 'Blue Bottle Coffee'; 'AMZN Mktp US*2K4' → 'Amazon';
+    'ACME DES:PAYROLL ID:XX0039Q INDN:DOE,JANE CO ID:XX1 PPD' → 'Acme Payroll (Jane)'."""
     raw = (payee or "").strip()
     if not raw:
         return ""
     for rx, name in _ALIAS_RE:
         if rx.search(raw):
             return name
+    ach = _ach_parts(raw)
+    if ach:
+        base, first = ach
+        name = _titlecase(_normalize_plain(base))  # same payer, same name — whatever the bank's casing
+        return f"{name} ({first})" if first else name
+    return _normalize_plain(raw)
+
+
+def _normalize_plain(raw: str) -> str:
     s = _PREFIX_RE.sub("", raw)
     s = re.sub(r"\s+\d{2}/\d{2}(?:/\d{2,4})?\b.*$", "", s)  # trailing dates
     s = re.sub(r"\*\s*[A-Z0-9]{4,}\b", "", s)  # reference codes after '*'

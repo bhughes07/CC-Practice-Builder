@@ -36,6 +36,14 @@ INCOME_HEADERS = ["Source", "Category", "Deposits", "Avg per month", "Total", "L
                   "Notes"]
 BUDGET_HEADER_ROW, INCOME_HEADER_ROW = 15, 5
 NOT_IN_PLAN, SEPARATOR = "not in plan", "Not in your plan yet"
+# Notes written by earlier versions of finagent that are no longer true; replaced on refresh.
+OUTDATED_NOTES = {
+    "Card payments are transfers in finagent: purchases on the card are already counted line by line. "
+    "Keep a budget here only for paying down an old balance.":
+        "Card payments from checking land here automatically (for cards you haven't connected).",
+    "Giving totaled $1,166 in February. Add the other giving line(s) below this one.":
+        "Your giving goal line — set it first each month.",
+}
 ACCENT, YELLOW, GREY, WHITE = "1D6B57", "FFF4CC", "F1F3F5", "FFFFFF"
 
 
@@ -61,7 +69,7 @@ def sheet_path(cfg) -> Path:
 class SheetData:
     lines: list[str] = field(default_factory=list)  # your budget lines, in your order
     budgets: dict[str, float] = field(default_factory=dict)
-    blank: set[str] = field(default_factory=set)  # lines with no budget typed in
+    blank: set[str] = field(default_factory=set)  # lines with no budget typed in (a typed 0 is a $0 budget)
     groups: dict[str, str] = field(default_factory=dict)
     matches: dict[str, list[str]] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
@@ -128,10 +136,10 @@ def read_sheet(path: Path) -> SheetData:
                 continue  # informational row we wrote, untouched by you
             if line not in data.lines:
                 data.lines.append(line)
-            if amount is None or amount <= 0:
+            if amount is None or amount < 0:
                 data.blank.add(line)
             else:
-                data.budgets[line] = amount
+                data.budgets[line] = amount  # a typed 0 is a real plan: spend nothing here
             if terms:
                 data.matches[line] = terms
             if note:
@@ -170,9 +178,10 @@ def merge_import(existing: SheetData | None, incoming: SheetData) -> SheetData:
     merged = SheetData(lines=list(incoming.lines), budgets=dict(incoming.budgets), blank=set(incoming.blank),
                        groups=dict(incoming.groups), matches=dict(incoming.matches), notes=dict(incoming.notes),
                        target_rate=incoming.target_rate, giving_goal=incoming.giving_goal)
-    if existing:
-        merged.income = dict(existing.income)
-        merged.income_notes = dict(existing.income_notes)
+    merged.income, merged.income_notes = dict(incoming.income), dict(incoming.income_notes)
+    if existing:  # your current choices, unless the imported file says otherwise
+        merged.income = {**existing.income, **incoming.income}
+        merged.income_notes = {**existing.income_notes, **incoming.income_notes}
         merged.target_rate = merged.target_rate or existing.target_rate
         merged.giving_goal = merged.giving_goal if merged.giving_goal is not None else existing.giving_goal
     return merged
@@ -237,8 +246,12 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
         return sum(t.outflow for t in L.expenses_between(start, end) if t.category == line) / len(months)
 
     by_cat = {s.category: s for s in suggestions}
-    if existing.lines:  # your plan, in your order
-        plan = list(existing.lines)
+    if existing.lines:  # your plan, in your order — lines kept together with their group
+        order: dict[str, list[str]] = {}
+        for line in existing.lines:
+            order.setdefault(existing.groups.get(line) or (by_cat[line].group if line in by_cat else
+                                                           L.group_of(line)), []).append(line)
+        plan = [line for lines_ in order.values() for line in lines_]
     else:
         plan = [s.category for s in suggestions] + [c for c in config_budgets if c not in by_cat]
     in_plan = set(plan)
@@ -340,8 +353,9 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
 
     r = first
     for line in plan:
+        note = existing.notes.get(line, "")
         write_row(r, line, budget_value(line), ", ".join(existing.matches.get(line, [])), kind(line),
-                  existing.notes.get(line, ""), True)
+                  OUTDATED_NOTES.get(note, note), True)
         r += 1
     if leftovers:
         r += 1
@@ -375,11 +389,6 @@ def write_sheet(path: Path, L: Ledger, suggestions: list[Suggestion], months6: l
     start6 = month_start(months6[0]) if months6 else date.min
     end6 = month_end(months6[-1]) if months6 else date.max
     sources = L.income_sources(start6, end6)
-    listed = {s["source"] for s in sources}
-    for src, choice in existing.income.items():  # keep sources you classified even if quiet lately
-        if src not in listed:
-            sources.append({"source": src, "category": "", "count": 0, "total": 0.0, "last": None,
-                            "regular": choice})
     dv = DataValidation(type="list", formula1='"Yes,No"', allow_blank=False)
     wi.add_data_validation(dv)
     for i, s in enumerate(sources):
@@ -458,3 +467,32 @@ def set_budgets(path: Path, changes: dict[str, float]) -> list[tuple[str, float 
         report.append((str(ws.cell(row, c_line).value), old, amount))
     wb.save(path)
     return report
+
+
+def set_matches(path: Path, line: str, terms: list[str], mode: str = "add") -> tuple[str, list[str]]:
+    """Add (default), replace, or remove Matches terms on a budget line. Returns (line, new terms)."""
+    openpyxl = require_openpyxl()
+    wb = openpyxl.load_workbook(path)
+    ws = wb[BUDGET]
+    hr = _find_header(ws, ("Monthly budget",), BUDGET_HEADER_ROW, ("Budget line", "Category"))
+    col = _header_index(ws, hr)
+    if "Matches" not in col:
+        raise ValueError("This spreadsheet has no Matches column — run `finagent sheet` to update it first.")
+    c_line = col.get("Budget line") or col.get("Category")
+    row = next((r for r in range(hr + 1, ws.max_row + 1)
+                if str(ws.cell(r, c_line).value or "").strip().lower() == line.lower()), None)
+    if row is None:
+        raise ValueError(f'There\'s no budget line called "{line}" on the Budget tab.')
+    current = split_terms(ws.cell(row, col["Matches"]).value)
+    if mode == "replace":
+        new = list(terms)
+    elif mode == "remove":
+        drop = {t.lower() for t in terms}
+        new = [t for t in current if t.lower() not in drop]
+    else:
+        new = current + [t for t in terms if t.lower() not in {c.lower() for c in current}]
+    ws.cell(row, col["Matches"], ", ".join(new) if new else None)
+    if "Type" in col and str(ws.cell(row, col["Type"]).value or "").lower() == NOT_IN_PLAN and new:
+        ws.cell(row, col["Type"], "flexible")
+    wb.save(path)
+    return str(ws.cell(row, c_line).value), new
