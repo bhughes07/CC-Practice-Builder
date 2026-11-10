@@ -405,6 +405,15 @@ def _count_card_payments(txns: list[Transaction], mode: str) -> None:
         o.flags.add("card payment")
 
 
+def _spending_class(line: str, group: str, overrides: dict) -> str:
+    """Class for spending filed under one of your budget lines. A line named like a transfer ("Credit Card
+    Payments") must not turn the spending it collects back into a transfer."""
+    cls = category_class(line, group, overrides)
+    if cls in (CLASS_TRANSFER, CLASS_INCOME):
+        return CLASS_DEBT if (CARD_PAYMENT.search(line) or DEBT_LINE.search(line)) else CLASS_OTHER
+    return cls
+
+
 PAYCHECK_HINT = re.compile(r"payroll|paycheck|salary|wages|direct dep", re.I)
 EXCLUDE_WORDS = {"exclude", "excluded", "not spending", "ignore", "skip"}
 
@@ -449,7 +458,7 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
             hit = match_line(t, debt_lines if "card payment" in t.flags else lines)
             if hit:
                 t.category, t.category_group, t.matched_by = hit[0], hit[1] or t.category_group, hit[2]
-                t.cls = category_class(t.category, t.category_group, overrides)
+                t.cls = _spending_class(t.category, t.category_group, overrides)
         if t.id in moved:  # you said where this one goes
             target = moved[t.id]
             if target.lower() in EXCLUDE_WORDS:
@@ -460,9 +469,7 @@ def enrich(txns: Iterable[Transaction], config: dict | None = None) -> list[Tran
                 t.category_group = line_groups.get(target, t.category_group)
                 t.is_transfer = False
                 t.flags.add("moved by you")
-                t.cls = category_class(t.category, t.category_group, overrides)
-                if t.cls in (CLASS_TRANSFER, CLASS_INCOME):  # you called it spending, so it is
-                    t.cls = CLASS_DEBT if CARD_PAYMENT.search(target) else CLASS_OTHER
+                t.cls = _spending_class(t.category, t.category_group, overrides)
         t.kind = classify_kind(t, t.cls)
         if t.kind == KIND_INCOME:
             t.cls = CLASS_INCOME

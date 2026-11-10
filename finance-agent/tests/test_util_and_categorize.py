@@ -179,3 +179,19 @@ def test_card_payment_isnt_moved_onto_a_merchant_line():
                                           "line_rules": [{"line": "Apple", "group": "Subscriptions",
                                                           "terms": ["Apple"]}]}})
     assert row.category == "Credit Card Payments" and row.kind == "expense"
+
+
+def test_matches_on_the_credit_card_payments_line_stay_spending():
+    """The line's name reads like a transfer; what it collects from checking is still money spent."""
+    from finagent.categorize import enrich
+    from finagent.models import Transaction
+    from datetime import date
+
+    def t(i, payee, amt, cat):
+        return Transaction(id=f"cc{i}", date=date(2026, 10, i), amount=amt, payee=payee, category=cat,
+                           account="Checking")
+    rules = [{"line": "Credit Card Payments", "group": "Insurance & Tax", "terms": ["Synchrony", "ACCT# 2563"]}]
+    rows = enrich([t(1, "Synchrony Bank DES:CC PYMT ID:XX55148", -126.0, "Credit Card Payment"),
+                   t(2, "Online Scheduled Payment to ACCT# 2563 Confirmation# X", -91.0, "Loan Payment")],
+                  {"categories": {"line_rules": rules, "card_payments": "auto"}})
+    assert [(r.category, r.cls, r.kind) for r in rows] == [("Credit Card Payments", "debt", "expense")] * 2
