@@ -27,6 +27,7 @@ Those files win over anything here. Read them before producing:
 - Trending audio can't be attached via API, so Reels that need it are posted from the phone.
 
 ## Decisions log
+- 2026-11-18: Posting notes: instagram.com defaults to a 1:1 crop, so pick 4:5 for every post; its "Share to Brad Hughes (Facebook)" toggle must stay off. instagram.com has a "Schedule content" switch. Business Suite opens a native file picker, so capture the input via JS before `file_upload`; decline its Reel/ad/boost prompts. (Claude)
 - 2026-11-18: **Posting route: Meta's own web interfaces, driven in Brad's Chrome** (Claude in Chrome). Facebook Page via Meta Business Suite (business.facebook.com, Page "Cheat Code Coaching", signed in); Instagram via instagram.com (signed in as `cheatcodeteams`, Create → Post takes video as a Reel). No API, no third-party tool, free, native upload. Every post still needs Brad's yes on that exact post in chat; then Claude uploads, pastes caption.txt, and publishes or schedules (Business Suite Planner schedules natively). Never Brad's personal Facebook. (Brad asked, Claude verified sign-ins)
 - 2026-11-18: Handoff from the marketing work: this producer is the video agent from here on. Video style: Brad's own spoken voice and stories, no corporate speak, dry self-deprecating humor, about 60s vertical for Instagram and the Cheat Code Facebook Page. Nothing goes on Brad's personal Facebook. Free tools only. (Brad, via handoff)
 - 2026-11-18: A 3D logo intro (`intro3d.blend`, built once, reused on every video) and a 12.5s 9:16 sample exist from the cloud work. Both are attachments in Brad's cheat-code-marketing channel, **not in this repo yet**. (handoff)
@@ -41,7 +42,7 @@ Those files win over anything here. Read them before producing:
 ## In flight
 | Item | Owner | Status |
 |---|---|---|
-| Launch set, 20 image posts (`ready/launch/`) | Claude | Reworked by Fable 2026-11-18. Brad approved the first nine (order in `ready/launch/README.md`) for IG + FB Page, then paused before anything posted. **Nothing posted yet.** Re-confirm with Brad before posting; the other 11 go out spread over the following days |
+| Launch set, 20 image posts (`ready/launch/`) | Claude | **First nine posted 2026-11-18** (Brad's yes in chat) to Instagram `cheatcodeteams` and the Cheat Code Coaching FB Page, in README order 1 to 9; nothing to Brad's personal Facebook, no boosts or ads. Remaining 11 (README 10 to 20) wait for Brad, spread out |
 | Practice Builder promo (16:9 + 9:16) | Claude | v2 with fixed CTA rendering. Needs Brad's eye: the footage is the standalone Practice Builder page, which may not match the current in-app screen |
 
 ## Integrations
