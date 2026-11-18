@@ -27,6 +27,7 @@ Those files win over anything here. Read them before producing:
 - Trending audio can't be attached via API, so Reels that need it are posted from the phone.
 
 ## Decisions log
+- 2026-11-18: Studio scripts run on Brad's Mac with Blender 5.3 (`cc_blender.py` handles both the 4.5 and 5.x APIs). (Claude)
 - 2026-11-18: Claude (this repo) is the **content producer**. Duet is the strategist/boss. Brad has final say and approves every public post. (Brad)
 - 2026-11-18: Promo end card switched to the fixed CTA, and "football coaches" changed to youth coaches generally. (Claude, per BRAND.md)
 - 2026-10-13: Instagram API publishing **parked**: Meta won't let Brad's account link the FB Page and IG. Posting is manual via post kits (`scripts/social/post-kit.js` in cheat-code-coaching → `social/ready/<slug>/`). (engineering log)
@@ -43,4 +44,4 @@ Those files win over anything here. Read them before producing:
 | Blender + ffmpeg (cloud) | working | reinstall line in CLAUDE.md |
 | Penpot | account + connector added 2026-11-18 | loads in **new** sessions only |
 | Meta (FB Page "Cheat Code Coaching" + IG) | publishing code built in cheat-code-coaching (`bobcat-site/functions/api/ig/`), **parked** | Meta account-link restriction. Until it lifts, Claude delivers post kits and Brad posts by hand. Credentials live on Brad's Mac (`~/.config/cheatcode/`) and in Cloudflare, never here |
-| Brad's Mac (Video Files) | not reachable from cloud | run a local Claude Code session on the Mac for footage work |
+| Brad's Mac (Video Files) | working (local session, 2026-11-18) | Blender 5.3 at `/Applications/Blender.app`; ffmpeg via Homebrew. Repo cloned to `~/Video Files/CC-Practice-Builder`, cheat-code-coaching read-only next to it. Scripts patched for the Blender 5 VSE/animation API (still 4.5-compatible). Don't commit `.blend` files saved by 5.x: 4.5 in the cloud can't open them |

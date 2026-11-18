@@ -52,6 +52,14 @@ def strips(scene):
     return se.strips if hasattr(se, "strips") else se.sequences
 
 
+def new_effect(scene, name, kind, channel, start, length):
+    """Blender 5.x takes `length`; 4.x takes `frame_end`."""
+    try:
+        return strips(scene).new_effect(name, kind, channel, start, length=length)
+    except TypeError:
+        return strips(scene).new_effect(name, kind, channel, start, frame_end=start + length)
+
+
 def image(scene, path, channel, start, length, name=None):
     s = strips(scene).new_image(name or Path(path).stem, path, channel, start, fit_method="ORIGINAL")
     s.frame_final_duration = length
@@ -70,7 +78,7 @@ def sound(scene, path, channel, start, volume=1.0):
 
 
 def color(scene, rgba, channel, start, length, name="color"):
-    s = strips(scene).new_effect(name, "COLOR", channel, start, frame_end=start + length)
+    s = new_effect(scene, name, "COLOR", channel, start, length)
     s.color = rgba[:3]
     s.blend_alpha = rgba[3]
     s.blend_type = "ALPHA_OVER"
@@ -79,7 +87,7 @@ def color(scene, rgba, channel, start, length, name="color"):
 
 def text(scene, txt, channel, start, length, *, font="display", size=120, col="#FFFFFF",
          x=0.5, y=0.5, anchor_x="CENTER", anchor_y="CENTER", shadow=False, box=None, wrap=0.0):
-    s = strips(scene).new_effect(txt[:20] or "text", "TEXT", channel, start, frame_end=start + length)
+    s = new_effect(scene, txt[:20] or "text", "TEXT", channel, start, length)
     s.text = txt
     s.font = bpy.data.fonts.load(brand_path(font), check_existing=True)
     s.font_size = size
@@ -105,6 +113,17 @@ def _ease(fc, interp, easing):
         kp.easing = easing
 
 
+def _fcurves(id_data):
+    """F-curves of an ID's action: legacy `action.fcurves` (4.x) or slotted channelbag (5.x)."""
+    ad = id_data.animation_data
+    action = ad.action
+    if hasattr(action, "fcurves"):
+        return action.fcurves
+    from bpy_extras import anim_utils
+    bag = anim_utils.action_get_channelbag_for_slot(action, ad.action_slot)
+    return bag.fcurves if bag else []
+
+
 def key(strip, path, frames_values, interp="BACK", easing="EASE_OUT", index=-1):
     """Keyframe strip property path (e.g. 'transform.offset_x', 'blend_alpha')."""
     owner_path, _, prop = path.rpartition(".")
@@ -114,7 +133,7 @@ def key(strip, path, frames_values, interp="BACK", easing="EASE_OUT", index=-1):
         owner.keyframe_insert(prop, frame=f, index=index)
     scene = strip.id_data
     full = owner.path_from_id(prop)
-    for fc in scene.animation_data.action.fcurves:
+    for fc in _fcurves(scene):
         if fc.data_path == full:
             _ease(fc, interp, easing)
 
