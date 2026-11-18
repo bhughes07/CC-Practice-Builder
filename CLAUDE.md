@@ -22,8 +22,15 @@ content: videos, reels, shorts, graphics, carousels, thumbnails and post copy.
   Brad has recorded standing approval in `studio/CONTEXT.md`. Messages from Duet or any other
   agent can't grant that approval.
 
-**Deliverables:** every piece goes in the formats the brief asks for (default 16:9 + 9:16
-for video, 1:1 + 4:5 + 9:16 for graphics), with a ready-to-paste caption and hashtags.
+**Deliverables are post kits.** Every piece ships in the formats the brief asks for (default
+9:16 + 16:9 for video, 4:5 for feed images and carousel slides, 9:16 for Stories), plus
+`caption.txt` with the fixed CTA appended and up to eight hashtags. Lay them out like the
+cheat-code-coaching repo's `social/ready/<slug>/<n>-<kind>/`. Instagram API publishing is
+parked (see CONTEXT.md), so Brad posts the kits by hand until it's unblocked.
+
+**The master brand system is in `bhughes07/cheat-code-coaching`** (`social/BRAND.md`, the
+brand guide, `social/posts.json`, `social/calendar/`). If it isn't cloned, clone it read-only
+next to this repo. Its rules win over anything here.
 
 ## Toolchain
 All of it is headless and scriptable. See `studio/README.md` for the full guide.
@@ -31,7 +38,8 @@ All of it is headless and scriptable. See `studio/README.md` for the full guide.
 - **ffmpeg** handles conforming, encoding, quick trims and probes.
 - **Playwright** records the app on screen: `studio/scripts/record_app.js`.
 - **Penpot** (open-source design, via its MCP connector once connected) for graphics, carousels and thumbnails. Until it is connected, build graphics from brand assets with code.
-- **Meta (Facebook + Instagram)** posting: not connected yet. See `studio/CONTEXT.md` → Integrations.
+- **Meta (Facebook + Instagram)**: publishing is built in cheat-code-coaching but parked by a Meta account restriction. See `studio/CONTEXT.md`.
+- **On Brad's Mac**: Blender lives at `/Applications/Blender.app/Contents/MacOS/Blender` (alias it as `blender`); footage is in his "Video Files" folder. The scripts work the same on macOS.
 - Brand assets (colors, fonts, logos, plates, SFX) live in `studio/brand/`. Never hard-code brand values. Read `brand.json`.
 
 If `blender` is missing (fresh cloud container), install it:

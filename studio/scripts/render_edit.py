@@ -176,9 +176,15 @@ def build(edit, fmt):
             cc.key(t, "transform.scale_y", [(start, 1.25), (start + 8, 1.0)], interp="EXPO")
             cc.fade(t, fin=5, fout=4)
             if card.get("subtitle"):
-                st = cc.text(sc, card["subtitle"].upper(), 13, start + 6, dur - 6, font="heading",
-                             size=int(size * 0.38), col=BLUE, y=0.53 - size / H * 0.95)
-                cc.fade(st, fin=6, fout=4)
+                # " · " separates lines (e.g. the CTA line); URLs render in brand blue
+                lines = [l.strip() for l in card["subtitle"].split(" · ")]
+                sub_size = int(W * (0.05 if portrait else 0.03)) if len(lines) > 1 else int(size * 0.38)
+                for k, line in enumerate(lines):
+                    col = BLUE if ".app" in line or ".com" in line else card.get("subtitle_color", BLUE)
+                    st = cc.text(sc, line.upper(), 13 + k, start + 6 + 2 * k, dur - 6 - 2 * k,
+                                 font="heading", size=sub_size, col=col,
+                                 y=0.53 - size / H * 0.62 - k * sub_size * 1.3 / H, anchor_y="TOP")
+                    cc.fade(st, fin=6, fout=4)
         else:
             raise ValueError(f"clip {i}: needs src, image or card")
         if i > 0 and xf:

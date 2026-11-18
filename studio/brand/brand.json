@@ -4,9 +4,11 @@
   "colors": {
     "blue": "#0446F9",
     "white": "#FFFFFF",
-    "night": "#06080D",
+    "night": "#0B0D12",
     "steel": "#9AA3A8",
-    "accent_orange": "#D98324"
+    "accent_orange": "#D98324",
+    "blue_deep": "#032DA2",
+    "blue_soft": "#4A7AFB"
   },
   "fonts": {
     "display": "fonts/Anton-Regular.ttf",
@@ -21,10 +23,27 @@
     "mark_route": "logos/mark-route.png"
   },
   "formats": {
-    "16x9": [1920, 1080],
-    "9x16": [1080, 1920],
-    "1x1": [1080, 1080],
-    "4x5": [1080, 1350]
+    "16x9": [
+      1920,
+      1080
+    ],
+    "9x16": [
+      1080,
+      1920
+    ],
+    "1x1": [
+      1080,
+      1080
+    ],
+    "4x5": [
+      1080,
+      1350
+    ]
   },
-  "fps": 30
+  "fps": 30,
+  "cta": {
+    "headline": "NOBODY GETS SKIPPED",
+    "line": "Sign up as a coach \u00b7 cheatcodecoaching.app \u00b7 Cheat Code Teams on the App Store",
+    "caption": "Nobody gets skipped. Sign up as a coach at cheatcodecoaching.app, then download Cheat Code Teams on the App Store."
+  }
 }
