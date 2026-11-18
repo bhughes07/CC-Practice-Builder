@@ -32,6 +32,19 @@ parked (see CONTEXT.md), so Brad posts the kits by hand until it's unblocked.
 brand guide, `social/posts.json`, `social/calendar/`). If it isn't cloned, clone it read-only
 next to this repo. Its rules win over anything here.
 
+## Model routing (Brad, 2026-11-18)
+Two subagents in `.claude/agents/` pin the model and effort for each kind of work:
+- **Visual** (video, reels, stings, graphics, carousels, thumbnails, covers, layout, motion,
+  reviewing frames) goes to `cc-visual`: Fable 5.2, medium effort.
+- **Written** (blog posts, captions, hooks, slide text, scripts, Skool posts, hashtags, copy
+  edits) goes to `cc-copy`: Opus 5.5, medium effort.
+
+Decide by what the audience takes in: if they look at it, it is visual; if they read or hear it
+as words, it is written. A mixed piece is split: `cc-copy` writes the words first, then
+`cc-visual` puts them on screen. The main session routes, checks the result and assembles the
+post kit; it does not do the production work itself on whatever model it happens to be running.
+A session can't change its own model, so routing is always by subagent.
+
 ## Toolchain
 All of it is headless and scriptable. See `studio/README.md` for the full guide.
 - **Blender (VSE)** does editing, titles, compositing and rendering: `studio/scripts/render_edit.py` and `sting.py`.

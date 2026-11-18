@@ -27,6 +27,7 @@ Those files win over anything here. Read them before producing:
 - Trending audio can't be attached via API, so Reels that need it are posted from the phone.
 
 ## Decisions log
+- 2026-11-18: Visual work runs on Fable 5.2 medium (`cc-visual`), written work on Opus 5.5 medium (`cc-copy`). Rule in CLAUDE.md. (Brad)
 - 2026-11-18: Studio scripts run on Brad's Mac with Blender 5.3 (`cc_blender.py` handles both the 4.5 and 5.x APIs). (Claude)
 - 2026-11-18: Claude (this repo) is the **content producer**. Duet is the strategist/boss. Brad has final say and approves every public post. (Brad)
 - 2026-11-18: Promo end card switched to the fixed CTA, and "football coaches" changed to youth coaches generally. (Claude, per BRAND.md)
