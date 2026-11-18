@@ -27,6 +27,8 @@ Those files win over anything here. Read them before producing:
 - Trending audio can't be attached via API, so Reels that need it are posted from the phone.
 
 ## Decisions log
+- 2026-11-18: Handoff from the marketing work: this producer is the video agent from here on. Video style: Brad's own spoken voice and stories, no corporate speak, dry self-deprecating humor, about 60s vertical for Instagram and the Cheat Code Facebook Page. Nothing goes on Brad's personal Facebook. Free tools only. (Brad, via handoff)
+- 2026-11-18: A 3D logo intro (`intro3d.blend`, built once, reused on every video) and a 12.5s 9:16 sample exist from the cloud work. Both are attachments in Brad's cheat-code-marketing channel, **not in this repo yet**. (handoff)
 - 2026-11-18: Duet and the producer talk through `studio/briefs/` in git (`inbox/` in, `outbox/` back). Protocol in `studio/briefs/README.md`. (Brad asked, Claude built)
 - 2026-11-18: Visual work runs on Fable 5.2 medium (`cc-visual`), written work on Opus 5.5 medium (`cc-copy`). Rule in CLAUDE.md. (Brad)
 - 2026-11-18: Studio scripts run on Brad's Mac with Blender 5.3 (`cc_blender.py` handles both the 4.5 and 5.x APIs). (Claude)
@@ -45,6 +47,7 @@ Those files win over anything here. Read them before producing:
 |---|---|---|
 | Blender + ffmpeg (cloud) | working | reinstall line in CLAUDE.md |
 | Duet briefs | channel built 2026-11-18, **untested**: no brief from Duet has arrived yet | Duet needs push access to this repo and must be pointed at `studio/briefs/README.md` |
+| MCP for Blender add-on | not installed, Brad to decide | Lets Claude drive an open Blender window. Not needed for renders: the headless scripts already work. Needs uv plus a third-party add-on on an IT-managed Mac |
 | Penpot | account + connector added 2026-11-18 | loads in **new** sessions only |
 | Meta (FB Page "Cheat Code Coaching" + IG) | publishing code built in cheat-code-coaching (`bobcat-site/functions/api/ig/`), **parked** | Meta account-link restriction. Until it lifts, Claude delivers post kits and Brad posts by hand. Credentials live on Brad's Mac (`~/.config/cheatcode/`) and in Cloudflare, never here |
 | Brad's Mac (Video Files) | working (local session, 2026-11-18) | Blender 5.3 at `/Applications/Blender.app`; ffmpeg via Homebrew. Repo cloned to `~/Video Files/CC-Practice-Builder`, cheat-code-coaching read-only next to it. Scripts patched for the Blender 5 VSE/animation API (still 4.5-compatible). Don't commit `.blend` files saved by 5.x: 4.5 in the cloud can't open them |
