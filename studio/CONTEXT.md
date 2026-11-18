@@ -27,4 +27,4 @@ Practice Builder conversation, or the Duet marketing agent) adds it here, newest
 ## In flight
 | Item | Owner | Status |
 |---|---|---|
-| Practice Builder promo (16:9 + 9:16) | Claude | first cut rendering |
+| Practice Builder promo (16:9 + 9:16) | Claude | first cut done, awaiting Brad review |
