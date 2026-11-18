@@ -16,7 +16,8 @@ i.e. 0 = first frame after the intro sting):
   "music": {"src": "footage/track.mp3", "volume": 0.35, "start": 0},
   "clips": [
     {"src": "footage/a.mp4", "in": 2.0, "out": 6.5, "volume": 1.0, "fit": "FILL",
-     "src_9x16": "footage/a-vertical.mp4"},                          # optional per-format source
+     "src_9x16": "footage/a-vertical.mp4",                           # optional per-format source
+     "scale_16x9": 1.3},                                             # optional punch-in (or "scale")
     {"image": "footage/photo.jpg", "dur": 3, "zoom": "in"},           # Ken Burns
     {"card": {"title": "BUILD PRACTICE", "subtitle": "in 5 minutes"}, "dur": 2.2}
   ],
@@ -85,6 +86,16 @@ def ensure_sting(fmt):
     return path
 
 
+def finish_audio(mp4):
+    """Loudness-normalise to -14 LUFS / -1 dBTP (social platform standard), video untouched."""
+    mp4 = Path(mp4)
+    tmp = mp4.with_suffix(".tmp.mp4")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(mp4), "-c:v", "copy",
+                    "-af", "loudnorm=I=-14:TP=-1.0:LRA=11", "-ar", "48000",
+                    "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", str(tmp)], check=True)
+    tmp.replace(mp4)
+
+
 def parse_srt(path):
     def t(s):
         h, m, rest = s.replace(",", ".").split(":")
@@ -138,6 +149,9 @@ def build(edit, fmt):
             info = probe(src)
             a, b = F(c.get("in", 0)), F(c.get("out", info["duration"]))
             v = cc.movie(sc, str(src), ch, start - a, fit=c.get("fit", "FILL"))
+            punch = c.get(f"scale_{fmt}", c.get("scale"))  # static punch-in, e.g. 1.3
+            if punch:
+                v.transform.scale_x = v.transform.scale_y = punch
             v.frame_final_start, v.frame_final_end = start, start - a + b
             snd = cc.sound(sc, str(src), 31 + ch_toggle, start - a, c.get("volume", 1.0))
             snd.frame_final_start, snd.frame_final_end = start, start - a + b
@@ -268,6 +282,7 @@ def main():
                 cc.render_still(sc, f, out_dir / "stills" / f"{fmt}-f{f:04d}.png")
         else:
             cc.render_mp4(sc, out_dir / f"{name}-{fmt}.mp4")
+            finish_audio(out_dir / f"{name}-{fmt}.mp4")
 
 
 if __name__ == "__main__":
