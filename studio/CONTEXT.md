@@ -41,6 +41,7 @@ Those files win over anything here. Read them before producing:
 ## In flight
 | Item | Owner | Status |
 |---|---|---|
+| Launch set, 20 image posts (`ready/launch/`) | Claude | Reworked by Fable 2026-11-18. Brad approved the first nine (order in `ready/launch/README.md`) for IG + FB Page, then paused before anything posted. **Nothing posted yet.** Re-confirm with Brad before posting; the other 11 go out spread over the following days |
 | Practice Builder promo (16:9 + 9:16) | Claude | v2 with fixed CTA rendering. Needs Brad's eye: the footage is the standalone Practice Builder page, which may not match the current in-app screen |
 
 ## Integrations
