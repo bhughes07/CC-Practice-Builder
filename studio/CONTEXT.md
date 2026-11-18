@@ -28,3 +28,15 @@ Practice Builder conversation, or the Duet marketing agent) adds it here, newest
 | Item | Owner | Status |
 |---|---|---|
 | Practice Builder promo (16:9 + 9:16) | Claude | first cut done, awaiting Brad review |
+
+## Integrations
+| Tool | Status | Notes |
+|---|---|---|
+| Blender + ffmpeg (cloud) | working | reinstall line in CLAUDE.md |
+| Penpot | account created 2026-11-18; connector not added yet | add at claude.ai/customize/connectors |
+| Meta (FB + IG) | unknown, may already exist in the "Cheat Code Coaching App" conversation | waiting on handoff below |
+| Brad's Mac (Video Files) | blocked | Mac isn't sharing folders with cloud sessions |
+
+## Handoff from the "Cheat Code Coaching App" conversation
+<!-- That conversation fills this in: Meta setup (method, Page + IG account names, where the
+     token lives, never the token itself), plus current decisions and approved copy. -->
