@@ -1,0 +1,475 @@
+{
+ "_note": "Launch set: the 20 October posts reworked. Photos are the licensed Pexels pool in cheat-code-coaching/social/photos/raw (credits in social/photos/CREDITS.md). App shots are the demo org only. Captions here exclude the fixed CTA and hashtags; render-launch.js appends them.",
+ "hashtags": {
+  "parents": [
+   "youthsports",
+   "youthcoach",
+   "volunteercoach",
+   "sportsparents",
+   "youthsportsparents",
+   "coachlife",
+   "playingtime"
+  ],
+  "practice": [
+   "youthsports",
+   "youthcoach",
+   "volunteercoach",
+   "practiceplan",
+   "coachingtips",
+   "coachlife",
+   "sportsparents"
+  ],
+  "league": [
+   "youthsports",
+   "youthcoach",
+   "volunteercoach",
+   "teamcommunication",
+   "sportsparents",
+   "teammom",
+   "leaguedirector",
+   "coachlife"
+  ],
+  "product": [
+   "youthsports",
+   "youthcoach",
+   "volunteercoach",
+   "coachlife",
+   "sportsparents",
+   "playerdevelopment"
+  ],
+  "org": [
+   "leaguedirector",
+   "youthsportsleague",
+   "youthsports",
+   "youthcoach",
+   "volunteercoach",
+   "playerdevelopment",
+   "recsports",
+   "clubsports"
+  ]
+ },
+ "posts": [
+  {
+   "slug": "site-copy",
+   "folder": "1-product-what-it-is-carousel",
+   "kind": "carousel",
+   "tag": "Cheat Code Teams",
+   "question": "What is actually in the app?",
+   "photo": "football-3302366.jpg",
+   "wash": "warm",
+   "pos": "center 35%",
+   "hashtags": "product",
+   "slides": [
+    {
+     "headline": "Built By\nA Coach",
+     "body": "One app for the whole season, built by a guy who was tired of running five. I use it with my own team every week."
+    },
+    {
+     "headline": "A Plan For\nEvery Player",
+     "body": "A season plan, weekly tasks and game reports for every kid. Their parents see it. Nobody else does.",
+     "shot": "feature-playerdev-2610.jpg"
+    },
+    {
+     "headline": "Practice Planned\nIn Five Minutes",
+     "body": "Drag drills from a real library into a timed plan. Know when practice ends before you leave the house.",
+     "shot": "feature-practice-2610.jpg"
+    },
+    {
+     "headline": "Parents\nIn The Loop",
+     "body": "Chat, calendar, plays and their kid's progress in one app they will actually open.",
+     "shot": "feature-parent-2610.jpg"
+    },
+    {
+     "headline": "One Chat,\nNot Nine",
+     "body": "A parents chat and a coaches chat in one place. Topics, so the snack schedule stops burying the field change.",
+     "shot": "feature-chat.jpg"
+    }
+   ],
+   "caption": "One app for the whole season, built by a coach who was tired of running five.\n\nHere is what is in Cheat Code Teams:\n\nA development card for every player. Season plan, weekly tasks, game reports. Their parents see it. Nobody else does.\n\nPractice Builder. Drag drills from a real library into a timed plan and know when practice ends before you leave the house.\n\nYour playbook in every parent's hands, next to the calendar, the chat and their own kid's progress. One app they will actually open.\n\nOne parents chat and one coaches chat, with topics, so the snack schedule stops burying the field change.\n\nA draft board.\n\nI am a youth football head coach in Trophy Club, Texas, with a full-time job and a family. I coach with this every week, and it works for any sport."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "2-product-four-problems-carousel",
+   "kind": "carousel",
+   "tag": "Why team apps fail",
+   "question": "Why does every team app feel like a chore?",
+   "photo": "boys-basketball-5549509.jpg",
+   "wash": "cool",
+   "pos": "center 60%",
+   "hashtags": "product",
+   "slides": [
+    {
+     "headline": "Four Apps\nAnd A Notebook",
+     "body": "A messaging app, a scheduling app, practice plans in a notes app, a notebook in the truck. Every team runs something different."
+    },
+    {
+     "headline": "Built By People\nWho Never Coached",
+     "body": "Whoever shipped those screens never installed a new play on Tuesday and needed parents to have it by Thursday."
+    },
+    {
+     "headline": "No Time To\nDevelop Everyone",
+     "body": "Practice is short and you have a full-time job. Developing every player should be the easy part. It was the part that got skipped."
+    },
+    {
+     "headline": "Five Screens\nTo Find Anything",
+     "body": "Coaches and parents should never hunt. One simple design, the same for everyone on the team."
+    },
+    {
+     "headline": "Coaching Is\nCommunication",
+     "body": "When the tools are bad the coaching suffers, and the team never plays to what it could be. So we fixed the tools."
+    }
+   ],
+   "caption": "A messaging app, a scheduling app, practice plans in a notes app, and a notebook in the truck.\n\nThat was my setup, and I bet it looks like yours. Four problems with it:\n\n1. Whoever built those apps never installed a new play on Tuesday and needed parents to have it by Thursday.\n\n2. Practice is short and you have a full-time job. Developing every player should be the easy part. It was the part that got skipped.\n\n3. Five screens to find anything. Coaches and parents should never hunt.\n\n4. Coaching is mostly communication. When the tools are bad, the coaching suffers and the team never plays to what it could be.\n\nSo we fixed the tools. One app, one design, the same for every coach and every parent."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "3-product-why-i-built-it-carousel",
+   "kind": "carousel",
+   "tag": "From the founder",
+   "question": "Why did a volunteer coach build an app?",
+   "photo": "football-15338953.jpg",
+   "wash": "warm",
+   "pos": "center 40%",
+   "handwriting": "I still coach with it every week.",
+   "hashtags": "product",
+   "slides": [
+    {
+     "headline": "Why I\nBuilt This",
+     "body": "I took a team with my son on it and we won it all. The trophy is not the part that stuck with me."
+    },
+    {
+     "headline": "It Was Never\nThe Best Few",
+     "body": "Our season was never going to be decided by my best players. It hinged on whether the rest of the roster got better."
+    },
+    {
+     "headline": "In Spite Of\nThe Tools",
+     "body": "I paid for the apps everyone uses. I coached those kids in spite of them, not because of them."
+    },
+    {
+     "headline": "Logistics Or\nDevelopment",
+     "body": "Hand-typing a schedule on a phone after work is time I should have spent on the kid who could take a step that month."
+    },
+    {
+     "headline": "So I\nBuilt It",
+     "body": "Draft board, Practice Builder, one chat, and a development plan for every player. Built in that life, by someone in it."
+    }
+   ],
+   "caption": "I took a team with my son on it and we won it all. The trophy is not the part that stuck with me.\n\nWhat stuck: our season was never going to be decided by my best players. It hinged on whether the rest of the roster got better.\n\nAnd I was coaching those kids in spite of my tools, not because of them. I paid for the apps everyone uses and still hand-typed the schedule into my phone after work. That hour belonged to the kid who could take a step that month.\n\nSo I built the app I needed. Draft board, Practice Builder, one chat, and a development plan for every player.\n\nI have a full-time job and a family, and I still coach with it every week. Built in that life, by someone in it."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "4-org-suite-carousel",
+   "kind": "carousel",
+   "tag": "For leagues and clubs",
+   "question": "Is the coaching actually landing?",
+   "photo": "field-lights-28827841.jpg",
+   "wash": "warm",
+   "pos": "center 55%",
+   "hashtags": "org",
+   "slides": [
+    {
+     "headline": "Fifty Coaches.\nOne Standard.",
+     "body": "A family's season should not depend on which team their kid got drafted to."
+    },
+    {
+     "headline": "Is The Coaching\nLanding?",
+     "body": "Every other dashboard says who paid. This one opens with how many players have a development plan, and how many nobody has looked at.",
+     "shot": "shots/org-coaches.jpg",
+     "crop": "desk"
+    },
+    {
+     "headline": "Read Any\nTeam Chat",
+     "body": "A coach who has gone quiet or crossed a line is something you find in week three, not week twelve. Coaches and parents are told.",
+     "shot": "shots/org-chats.jpg",
+     "crop": "desk"
+    },
+    {
+     "headline": "Ninety People\nIn Five Minutes",
+     "body": "Fields flood on a Saturday. One message to every coach, every parent, or everyone: push, email, or into every team chat.",
+     "shot": "shots/org-announcements.jpg",
+     "crop": "desk"
+    },
+    {
+     "headline": "Set Up The\nWhole Season",
+     "body": "Teams by grade, coaches assigned, your logo and colors on every team the moment it is created.",
+     "shot": "shots/org-season.jpg",
+     "crop": "desk"
+    }
+   ],
+   "caption": "A family's season should not depend on which team their kid got drafted to.\n\nYour best coaches already develop their whole roster. Your newest ones are surviving one practice at a time. The Org Suite in Cheat Code Teams puts the same tools and the same per-player development record in front of every coach you have.\n\nWhat a league director gets:\n\nOne screen that opens with how many players have a development plan, and how many nobody has looked at. Counts only. No child's ratings, notes or messages ever leave the team.\n\nRead any team chat. A coach who has gone quiet or crossed a line is something you find in week three, not week twelve. Coaches and parents are told you can.\n\nOne message to every coach, every parent, or everyone: push, email, or straight into every team chat. Ninety people in five minutes when the fields flood.\n\nSeason setup: teams by grade, coaches assigned, your logo and colors on every team the moment it is created."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "5-product-quote-1",
+   "kind": "quote",
+   "photo": "boys-soccer-7307392.jpg",
+   "wash": "warm",
+   "pos": "center 45%",
+   "headline": "Your season rides on how you develop players.",
+   "hashtags": "product",
+   "caption": "Your season rides on how you develop players.\n\nNot on the two best kids. They were going to be fine. It rides on the seven in the middle, and whether somebody had a plan for each of them past \"show up Tuesday.\"\n\nThat is what Cheat Code Teams is built around: a development card for every player, built by a head coach in Trophy Club, Texas, for any sport."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "6-product-quote-2",
+   "kind": "quote",
+   "photo": "field-lights-15779126.jpg",
+   "wash": "warm",
+   "pos": "center 50%",
+   "lift": true,
+   "headline": "Fifty coaches. One standard.",
+   "hashtags": "org",
+   "caption": "Fifty coaches. One standard.\n\nIf you run a league, you have a handful of coaches who develop every kid on the roster and a lot more who are surviving one practice at a time. The gap between them is a family's whole season.\n\nThe Org Suite in Cheat Code Teams gives every coach you have the same tools and the same per-player record, and gives you one screen that shows whether the coaching is landing."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "7-product-quote-3",
+   "kind": "quote",
+   "photo": "football-39170961.jpg",
+   "wash": "warm",
+   "pos": "center 40%",
+   "headline": "I coached those kids in spite of the tools I had.",
+   "hashtags": "product",
+   "caption": "I coached those kids in spite of the tools I had.\n\nNot because of them. I paid for the apps everyone uses and still spent Tuesday nights hand-typing a schedule into my phone. That hour belonged to the kid who could take a step that month.\n\nSo I built the one I needed, and I still coach with it every week."
+  },
+  {
+   "slug": "site-copy",
+   "folder": "8-product-quote-4",
+   "kind": "quote",
+   "photo": "girls-soccer-38134409.jpg",
+   "wash": "warm",
+   "pos": "center 40%",
+   "headline": "The best players will be fine. Make the whole roster better.",
+   "hashtags": "product",
+   "caption": "The best players will be fine. Make the whole roster better.\n\nThat is the whole idea behind Cheat Code Teams. Every kid gets a development card: a season plan, a task for the week, a game report. Their parents see it. Nobody else does.\n\nNobody gets skipped is the design, not a slogan we came up with after."
+  },
+  {
+   "slug": "coaching-your-own-child",
+   "folder": "1-carousel",
+   "kind": "carousel",
+   "tag": "Parent conversations",
+   "question": "How do I coach my own kid without favoritism?",
+   "photo": "baseball-5184706.jpg",
+   "wash": "warm",
+   "pos": "center 50%",
+   "handwriting": "The goal is that nobody can tell which player is yours.",
+   "hashtags": "parents",
+   "slides": [
+    {
+     "headline": "The Quiet\nRide Home",
+     "body": "Game is over. Bag in the trunk, kid in the back, heater ticking. You have nine opinions about the third quarter. Hold them."
+    },
+    {
+     "headline": "Parent\nFirst",
+     "body": "They were your kid before they played a down. They will not remember your calls. They remember how the car felt after a bad one."
+    },
+    {
+     "headline": "Harder Is\nNot Fair",
+     "body": "Yelling louder at your own kid so the bleachers notice is still favoritism, pointed the other way. One standard. No better, no worse."
+    },
+    {
+     "headline": "Talk About\nThem, Not It",
+     "body": "I liked watching you today. Where do you want to eat. If they want to replay the game, let them lead. Otherwise let it go."
+    },
+    {
+     "headline": "Fix It\nAt Practice",
+     "body": "Practice is where the skills talk lives. Praise effort. Let them pick one small thing to work on. Ask the whole team: are we perfect?"
+    }
+   ],
+   "caption": "Nobody at the game should be able to tell which kid is mine. I miss that more often than I would like.\n\nFour things that help when you coach your own child:\n\n1. Parent first. You had that job before they ever played a down, and you still have it after a loss.\n\n2. One standard. Riding your own kid harder so the bleachers notice is still favoritism, just pointed the other way.\n\n3. The ride home is not film study. \"I liked watching you today. Where do you want to eat.\" If they want to replay the game, they will bring it up.\n\n4. Save the skills talk for practice. That is where it belongs, and where the rest of the team hears it too."
+  },
+  {
+   "slug": "coaching-your-own-child",
+   "folder": "3-quote-1",
+   "kind": "quote",
+   "photo": "boys-basketball-33607436.jpg",
+   "wash": "cool",
+   "pos": "center 85%",
+   "headline": "The goal is that nobody can tell which player is yours.",
+   "hashtags": "parents",
+   "caption": "The goal is that nobody can tell which player is yours.\n\nNot the ref, not the other parents, not your kid. Same praise, same corrections, same playing time rules as everyone else on the roster.\n\nThe day another parent asks \"wait, which one is yours?\" you are doing it right."
+  },
+  {
+   "slug": "coaching-your-own-child",
+   "folder": "4-quote-2",
+   "kind": "quote",
+   "photo": "girls-softball-37792440.jpg",
+   "wash": "warm",
+   "pos": "center 40%",
+   "headline": "Harder on your own kid is not the same as fair.",
+   "hashtags": "parents",
+   "caption": "Harder on your own kid is not the same as fair.\n\nI know the move. Yell a little louder at your own kid so the bleachers can see you are not playing favorites. It is still favoritism, just pointed the other way, and your kid is the one paying for it.\n\nOne standard for every player. Yours included. No better, no worse."
+  },
+  {
+   "slug": "first-youth-practice-60-minute-plan",
+   "folder": "1-carousel",
+   "kind": "carousel",
+   "tag": "Practice",
+   "question": "What do I do in my first practice?",
+   "photo": "boys-soccer-32709238.jpg",
+   "wash": "warm",
+   "pos": "center 50%",
+   "handwriting": "No plan means making it up in front of twelve kids.",
+   "hashtags": "practice",
+   "slides": [
+    {
+     "headline": "First Night.\nNow What?",
+     "body": "A dozen kids in a half circle, a bag of cones, and about an hour. Here is the 60 minutes I would run."
+    },
+    {
+     "headline": "The Hour,\nRoughly",
+     "body": "Eight minutes of free play, a four-minute huddle, a tag game, one skill, two short games, then 3v3. Bend it. Do not skip it."
+    },
+    {
+     "headline": "Names\nFirst",
+     "body": "Get there fifteen minutes early. Set up two play areas, a ball at every spot. Kids walk into something to do while you learn names."
+    },
+    {
+     "headline": "Games,\nNot Lines",
+     "body": "Warm up with tag, not a lap. Teach one skill in under a minute, then run it as a game. Waiting kids learn nothing."
+    },
+    {
+     "headline": "Loud Start,\nQuiet Finish",
+     "body": "Open loud: who's ready to run like crazy people? Close on a knee: are we perfect? What can we do to keep getting better?"
+    }
+   ],
+   "caption": "Your first practice: a dozen kids, a bag of cones, and about an hour. Here is what I would run.\n\nGet there 15 minutes early. Set up two play areas with a ball at every spot. Kids walk into something to do while you learn names. That is the first eight minutes.\n\nThen, roughly:\n\n4 minute huddle. Names again. One rule.\nTag game to warm up. Not a lap. Nobody got better running a lap.\nOne skill, taught in under a minute, then run as a game.\nTwo short games, then 3v3.\nTake a knee. Ask: are we perfect? What can we do to keep getting better?\n\nOpen loud (\"who's ready to run like crazy people?\") and close on a question.\n\nWrite it on an index card. Expect it to go sideways by minute twenty. A plan that bends still beats a coach making it up in front of twelve kids."
+  },
+  {
+   "slug": "first-youth-practice-60-minute-plan",
+   "folder": "3-quote-1",
+   "kind": "quote",
+   "photo": "football-15018950.jpg",
+   "wash": "cool",
+   "pos": "center 55%",
+   "headline": "No plan means making it up in front of twelve kids.",
+   "hashtags": "practice",
+   "caption": "No plan means making it up in front of twelve kids.\n\nThey can tell. The parents on the fence can tell. Write the hour on an index card before you leave the house: warm-up game, one skill, two games, 3v3, huddle.\n\nYou will not follow it exactly. You will also never stand there holding a whistle wondering what comes next."
+  },
+  {
+   "slug": "first-youth-practice-60-minute-plan",
+   "folder": "4-quote-2",
+   "kind": "quote",
+   "photo": "cross-country-35135977.jpg",
+   "wash": "warm",
+   "pos": "center 50%",
+   "headline": "Warm up with a game, not a lap.",
+   "hashtags": "practice",
+   "caption": "Warm up with a game, not a lap.\n\nNobody got better jogging around a field, and the kid at the back of the lap is learning that practice is a punishment.\n\nPlay tag. They are warm in three minutes, they are laughing, and you got a look at who can move. Lines and laps are where waiting kids learn nothing."
+  },
+  {
+   "slug": "team-communication-parents-actually-read",
+   "folder": "1-carousel",
+   "kind": "carousel",
+   "tag": "Team communication",
+   "question": "Why won't parents read my messages?",
+   "photo": "field-lights-37391237.jpg",
+   "wash": "warm",
+   "pos": "center 50%",
+   "handwriting": "Your message was fine. Parents had four places to look.",
+   "hashtags": "league",
+   "slides": [
+    {
+     "headline": "Field 2,\nAgain",
+     "body": "Saturday, 8:40. Fourteen families at Field 2. You are at Field 4 with a bag of cones. And you sent the message Thursday."
+    },
+    {
+     "headline": "Not The\nMessage",
+     "body": "Your message was fine. It scrolled up under forty replies about orange slices, and somebody pasted the August email that said Field 2."
+    },
+    {
+     "headline": "Stop Competing\nWith Yourself",
+     "body": "Email in August, a text from the team mom, a league app, a group chat. Four places to look. Parents picked the wrong one."
+    },
+    {
+     "headline": "One Place,\nEvery Time",
+     "body": "Schedule, every change, every request, all in one spot. Side chats for carpools are fine. They just never count as official."
+    },
+    {
+     "headline": "Boring\nSaturdays",
+     "body": "In Cheat Code Teams you change the field once and every parent sees it. Nobody scrolls, nobody texts you at 7 a.m. Boring Saturdays."
+    }
+   ],
+   "caption": "Saturday, 8:40 a.m. Fourteen families at Field 2. You are at Field 4 with a bag of cones. And you sent the message Thursday.\n\nYour message was fine. It scrolled up under forty replies about orange slices, and somebody pasted the August email that still said Field 2.\n\nParents do read. They just had four places to look: the August email, a text from the team mom, the league app, the group chat. They picked the wrong one.\n\nThe fix is boring. One place for the schedule, every change, and every request. Side chats for carpools are fine, they just never count as official. Say that at the parent meeting.\n\nIn Cheat Code Teams you change the field once and every parent sees it. Nobody scrolls, nobody texts you at 7 a.m. Boring Saturdays are the goal."
+  },
+  {
+   "slug": "team-communication-parents-actually-read",
+   "folder": "3-quote-1",
+   "kind": "quote",
+   "photo": "boys-lacrosse-38510554.jpg",
+   "wash": "cool",
+   "pos": "center 45%",
+   "headline": "Your message was fine. Parents had four places to look.",
+   "hashtags": "league",
+   "caption": "Your message was fine. Parents had four places to look.\n\nAn email from August, a text from the team mom, the league app, the group chat. Every one of them was \"official\" at some point this season. When the field changes, a parent checks the one they remember, and that is the one that is wrong.\n\nStop competing with yourself. One place, every time."
+  },
+  {
+   "slug": "team-communication-parents-actually-read",
+   "folder": "4-quote-2",
+   "kind": "quote",
+   "photo": "gym-floor-7201554.jpg",
+   "wash": "cool",
+   "pos": "center 50%",
+   "headline": "Stop competing with yourself. Put everything in one place.",
+   "hashtags": "league",
+   "caption": "Stop competing with yourself. Put everything in one place.\n\nEvery extra channel you open is one more place a parent can look and find the old answer. Schedule, changes, requests: one spot. Carpool side chats are fine. They just never count.\n\nSay that at the parent meeting, then hold yourself to it. That second part is the hard one."
+  },
+  {
+   "slug": "youth-sports-playing-time-policy",
+   "folder": "1-carousel",
+   "kind": "carousel",
+   "tag": "Parent conversations",
+   "question": "Should I give equal playing time, and how do I explain my policy?",
+   "photo": "baseball-7924607.jpg",
+   "wash": "warm",
+   "pos": "center 40%",
+   "handwriting": "Nothing good comes out of a parking lot argument.",
+   "hashtags": "parents",
+   "slides": [
+    {
+     "headline": "Equal Time\nOr Earned?",
+     "body": "Should I give equal playing time, and how do I explain the policy to parents? Here is how I weigh it."
+    },
+    {
+     "headline": "Read The\nRulebook",
+     "body": "Your league already set a floor. Little League, AYSO and travel ball each promise something different, and none of them promise equal."
+    },
+    {
+     "headline": "Know Your\nTeam",
+     "body": "Five-year-olds in rec? Equal time is easy. Eleven-year-olds who tried out and drive an hour each way? Harder, and I will not pretend otherwise."
+    },
+    {
+     "headline": "Win And\nDevelop",
+     "body": "It is okay to play to win. Develop every kid, find the spot where he succeeds, get as many in the game as you can."
+    },
+    {
+     "headline": "Write It\nDown",
+     "body": "Policy on paper, kept short. Read it at the parent meeting, hand out copies, and ask parents to wait 24 hours before any complaint."
+    }
+   ],
+   "caption": "Should you give equal playing time? No. Here is how I actually weigh it.\n\n1. Read the rulebook first. Your league already set a floor. Little League's mandatory play rule, AYSO's half-of-every-game floor and travel ball each promise something different, and none of them promise equal. Whatever you write has to clear your league's floor.\n\n2. Know your team. Five-year-olds in rec: equal is easy and right. Eleven-year-olds who tried out and drive an hour each way: harder, and I will not pretend otherwise.\n\n3. You can play to win and still develop every kid. Find the spot where each one succeeds and get as many in the game as you can.\n\n4. Write it down. Keep it short, read it at the parent meeting, hand out copies, and ask parents to wait 24 hours before any complaint.\n\nNothing good has ever come out of a parking lot argument. The policy on paper is how you avoid one."
+  },
+  {
+   "slug": "youth-sports-playing-time-policy",
+   "folder": "3-quote-1",
+   "kind": "quote",
+   "photo": "field-lights-38729909.jpg",
+   "wash": "warm",
+   "pos": "center 60%",
+   "headline": "Nothing good comes out of a parking lot argument.",
+   "hashtags": "parents",
+   "caption": "Nothing good comes out of a parking lot argument.\n\nThe playing time conversation is coming. Have it in August at the parent meeting, on paper, before anyone is mad. Then ask for 24 hours before any complaint.\n\nMost of them never show up. The ones that do are a lot calmer than the version at 9 p.m. next to a minivan."
+  },
+  {
+   "slug": "youth-sports-playing-time-policy",
+   "folder": "4-quote-2",
+   "kind": "quote",
+   "photo": "track-32255498.jpg",
+   "wash": "warm",
+   "pos": "center 50%",
+   "headline": "Those are different promises, and none of them are equal.",
+   "hashtags": "parents",
+   "caption": "Those are different promises, and none of them are equal.\n\nLittle League's mandatory play rule puts every kid in the field for six defensive outs and at the plate once (littleleague.org). AYSO's floor is half of every game (ayso.org). Travel ball usually promises nothing.\n\nYour league already set a floor, and your policy has to clear it. So before you write a word about playing time, open the rulebook. It is shorter than the argument."
+  }
+ ]
+}
