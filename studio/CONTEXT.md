@@ -27,6 +27,7 @@ Those files win over anything here. Read them before producing:
 - Trending audio can't be attached via API, so Reels that need it are posted from the phone.
 
 ## Decisions log
+- 2026-11-18: Duet and the producer talk through `studio/briefs/` in git (`inbox/` in, `outbox/` back). Protocol in `studio/briefs/README.md`. (Brad asked, Claude built)
 - 2026-11-18: Visual work runs on Fable 5.2 medium (`cc-visual`), written work on Opus 5.5 medium (`cc-copy`). Rule in CLAUDE.md. (Brad)
 - 2026-11-18: Studio scripts run on Brad's Mac with Blender 5.3 (`cc_blender.py` handles both the 4.5 and 5.x APIs). (Claude)
 - 2026-11-18: Claude (this repo) is the **content producer**. Duet is the strategist/boss. Brad has final say and approves every public post. (Brad)
@@ -43,6 +44,7 @@ Those files win over anything here. Read them before producing:
 | Tool | Status | Notes |
 |---|---|---|
 | Blender + ffmpeg (cloud) | working | reinstall line in CLAUDE.md |
+| Duet briefs | channel built 2026-11-18, **untested**: no brief from Duet has arrived yet | Duet needs push access to this repo and must be pointed at `studio/briefs/README.md` |
 | Penpot | account + connector added 2026-11-18 | loads in **new** sessions only |
 | Meta (FB Page "Cheat Code Coaching" + IG) | publishing code built in cheat-code-coaching (`bobcat-site/functions/api/ig/`), **parked** | Meta account-link restriction. Until it lifts, Claude delivers post kits and Brad posts by hand. Credentials live on Brad's Mac (`~/.config/cheatcode/`) and in Cloudflare, never here |
 | Brad's Mac (Video Files) | working (local session, 2026-11-18) | Blender 5.3 at `/Applications/Blender.app`; ffmpeg via Homebrew. Repo cloned to `~/Video Files/CC-Practice-Builder`, cheat-code-coaching read-only next to it. Scripts patched for the Blender 5 VSE/animation API (still 4.5-compatible). Don't commit `.blend` files saved by 5.x: 4.5 in the cloud can't open them |

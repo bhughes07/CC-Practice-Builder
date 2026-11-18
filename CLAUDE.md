@@ -61,13 +61,16 @@ curl -sSfL https://download.blender.org/release/Blender4.5/blender-4.5.16-linux-
 ```
 
 ## Workflow for a brief
+0. Every session, run `studio/scripts/check_inbox.sh`. It pulls the branch and lists briefs
+   and notes from Duet. The protocol both sides follow is `studio/briefs/README.md`: briefs
+   arrive in `inbox/`, questions and delivery notes go back in `outbox/`.
 1. Read the brief in `studio/briefs/inbox/` (or the message). Ask about anything that
    blocks the edit. For everything else, make a sensible creative call and say what it was.
 2. Gather footage into `studio/footage/<project>/`.
 3. Write `studio/edits/<project>.json`. The schema is at the top of `render_edit.py`.
 4. Preview with `--stills`, look at the frames, fix problems, then render.
-5. Deliver from `studio/renders/<project>/`, move the brief to `studio/briefs/done/`, and
-   commit.
+5. Deliver from `studio/renders/<project>/`, move the brief to `studio/briefs/done/`, write a
+   delivery note to `studio/briefs/outbox/`, commit and push.
 
 ## Brand rules
 - Colors: blue `#0446F9`, white, night `#06080D`. Display font Anton, headings Oswald,
