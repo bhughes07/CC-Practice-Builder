@@ -26,7 +26,9 @@ content: videos, reels, shorts, graphics, carousels, thumbnails and post copy.
 9:16 + 16:9 for video, 4:5 for feed images and carousel slides, 9:16 for Stories), plus
 `caption.txt` with the fixed CTA appended and up to eight hashtags. Lay them out like the
 cheat-code-coaching repo's `social/ready/<slug>/<n>-<kind>/`. Instagram API publishing is
-parked (see CONTEXT.md), so Brad posts the kits by hand until it's unblocked.
+parked (see CONTEXT.md). Instead, with Brad's yes on each exact post, Claude posts kits through
+Meta's own web interfaces in Brad's Chrome: Business Suite for the Facebook Page, instagram.com
+for Instagram.
 
 **The master brand system is in `bhughes07/cheat-code-coaching`** (`social/BRAND.md`, the
 brand guide, `social/posts.json`, `social/calendar/`). If it isn't cloned, clone it read-only
