@@ -1,0 +1,4 @@
+studio/renders/.cache/
+studio/renders/*/stills/
+*.blend1
+__pycache__/

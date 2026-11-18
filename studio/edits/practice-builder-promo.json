@@ -1,0 +1,22 @@
+{
+  "name": "practice-builder-promo",
+  "formats": ["16x9", "9x16"],
+  "intro_sting": true,
+  "outro_sting": true,
+  "logo_bug": true,
+  "transition": 0.25,
+  "music": {"src": "brand/sfx/music-bed.wav", "volume": 0.45},
+  "clips": [
+    {"card": {"title": "STOP WINGING PRACTICE", "subtitle": "Plan every minute"}, "dur": 2.4},
+    {"src": "footage/app/hero-16x9.webm", "src_9x16": "footage/app/hero-9x16.webm", "in": 2.2, "out": 6.4},
+    {"src": "footage/app/plan-scroll-16x9.webm", "src_9x16": "footage/app/plan-scroll-9x16.webm", "in": 4.0, "out": 10.6},
+    {"card": {"title": "BUILD IT ONCE", "subtitle": "Run it every week"}, "dur": 2.0},
+    {"src": "footage/app/drill-library-16x9.webm", "src_9x16": "footage/app/drill-library-9x16.webm", "in": 2.4, "out": 8.6},
+    {"card": {"title": "PRACTICE BUILDER", "subtitle": "By Cheat Code Coaching"}, "dur": 2.6}
+  ],
+  "titles": [
+    {"text": "Practice Builder", "sub": "Built for youth football coaches", "at": 2.7, "dur": 3.0, "style": "lower_third"},
+    {"text": "Every minute planned", "sub": "Start times update automatically", "at": 6.6, "dur": 4.0, "style": "lower_third"},
+    {"text": "Your drill library", "sub": "Instructions, coaching points and video", "at": 16.0, "dur": 4.0, "style": "lower_third"}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "Cheat Code Coaching",
+  "tagline": "Your cheat code is our plan",
+  "colors": {
+    "blue": "#0446F9",
+    "white": "#FFFFFF",
+    "night": "#06080D",
+    "steel": "#9AA3A8",
+    "accent_orange": "#D98324"
+  },
+  "fonts": {
+    "display": "fonts/Anton-Regular.ttf",
+    "heading": "fonts/Oswald-Variable.ttf",
+    "body": "fonts/Inter-Variable.ttf"
+  },
+  "logos": {
+    "full": "logos/logo-full.png",
+    "mark": "logos/mark.png",
+    "mark_white_c": "logos/mark-white.png",
+    "mark_blue_c": "logos/mark-blue-c.png",
+    "mark_route": "logos/mark-route.png"
+  },
+  "formats": {
+    "16x9": [1920, 1080],
+    "9x16": [1080, 1920],
+    "1x1": [1080, 1080],
+    "4x5": [1080, 1350]
+  },
+  "fps": 30
+}
